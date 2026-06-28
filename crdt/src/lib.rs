@@ -77,6 +77,27 @@ impl SequenceCrdt {
         Self::default()
     }
 
+    pub fn from_string(s: &str) -> Self {
+        let mut crdt = Self::new();
+        let peer = PeerId::nil();
+        for (i, ch) in s.chars().enumerate() {
+            let id = OpId::new(peer, (i + 1) as u64);
+            let after = if i == 0 {
+                None
+            } else {
+                Some(OpId::new(peer, i as u64))
+            };
+            crdt.elements.push(Element {
+                id,
+                after,
+                content: ch,
+                deleted: false,
+            });
+        }
+        crdt.rebuild_index();
+        crdt
+    }
+
     pub fn apply(&mut self, op: Op) {
         match op {
             Op::Insert { id, after, content } => {
