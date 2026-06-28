@@ -1,0 +1,18 @@
+[package]
+name = "helios-server"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "helios-server"
+path = "src/main.rs"
+
+[dependencies]
+helios-network = { path = "../network" }
+helios-crdt = { path = "../crdt" }
+helios-storage = { path = "../storage" }
+axum = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
