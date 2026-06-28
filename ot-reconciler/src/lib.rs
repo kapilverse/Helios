@@ -40,37 +40,19 @@ impl OtReconciler {
             }
 
             // Delete-Insert: deleting what b inserted
-            (Op::Delete { target }, Op::Insert { id: id_b, .. }) => {
-                if target == id_b {
-                    a.clone()
-                } else {
-                    a.clone()
-                }
-            }
+            (Op::Delete { .. }, Op::Insert { .. }) => a.clone(),
 
             // Insert-Delete: if b deletes what a inserted
-            (Op::Insert { id: id_a, .. }, Op::Delete { target }) => {
-                if id_a == target {
-                    a.clone()
-                } else {
-                    a.clone()
-                }
-            }
+            (Op::Insert { .. }, Op::Delete { .. }) => a.clone(),
 
             // Delete-Delete: idempotent
             (Op::Delete { .. }, Op::Delete { .. }) => a.clone(),
 
             // SetKey-SetKey: LWW by timestamp
             (
-                Op::SetKey { key: k_a, ts: ts_a, .. },
-                Op::SetKey { key: k_b, ts: ts_b, .. },
-            ) => {
-                if k_a == k_b && ts_a < ts_b {
-                    a.clone()
-                } else {
-                    a.clone()
-                }
-            }
+                Op::SetKey { .. },
+                Op::SetKey { .. },
+            ) => a.clone(),
 
             // SetKey vs Insert/Delete: independent
             _ => a.clone(),
