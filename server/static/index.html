@@ -12,6 +12,7 @@
         .status { padding: 0.5rem; margin-bottom: 1rem; border-radius: 4px; font-size: 0.875rem; }
         .status.connected { background: #064e3b; color: #6ee7b7; }
         .status.disconnected { background: #7f1d1d; color: #fca5a5; }
+        .status.syncing { background: #78350f; color: #fbbf24; }
         #editor {
             width: 100%;
             min-height: 400px;
@@ -27,6 +28,7 @@
         }
         #editor:focus { border-color: #38bdf8; }
         .peers { margin-top: 1rem; font-size: 0.875rem; color: #94a3b8; }
+        .peer { display: inline-block; margin-right: 0.5rem; padding: 0.25rem 0.5rem; background: #334155; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -42,42 +44,80 @@
         const peersEl = document.getElementById('peers');
 
         let ws;
-        let peerId = crypto.randomUUID();
+        let peerId = null;
+        let syncSeq = 0;
+
+        function setStatus(text, cls) {
+            statusEl.textContent = text;
+            statusEl.className = 'status ' + cls;
+        }
 
         function connect() {
             const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${location.host}/ws`);
 
             ws.onopen = () => {
-                statusEl.textContent = 'Connected';
-                statusEl.className = 'status connected';
+                setStatus('Connected', 'connected');
                 ws.send(JSON.stringify({ Join: { document_id: 'default' } }));
             };
 
             ws.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
-                if (msg.Op) {
-                    // Another client's op — could apply to editor
-                } else if (msg.Sync) {
-                    // Initial sync
+
+                if (msg.Sync) {
+                    const resp = msg.Sync.response;
+                    syncSeq = resp.current_seq;
+
+                    // Apply any missed ops
+                    if (resp.ops) {
+                        for (const [seq, op] of resp.ops) {
+                            applyOp(op);
+                            syncSeq = Math.max(syncSeq, seq);
+                        }
+                    }
+                } else if (msg.Op) {
+                    applyOp(msg.Op.op);
+                    syncSeq = msg.Op.seq;
+                } else if (msg.Presence) {
+                    updatePeers(msg.Presence.peers);
                 }
             };
 
             ws.onclose = () => {
-                statusEl.textContent = 'Disconnected — reconnecting...';
-                statusEl.className = 'status disconnected';
+                setStatus('Disconnected — reconnecting...', 'disconnected');
                 setTimeout(connect, 2000);
+            };
+
+            ws.onerror = () => {
+                setStatus('Error', 'disconnected');
             };
         }
 
+        function applyOp(op) {
+            if (op.Insert) {
+                // For now, just append to editor
+                // TODO: Position-based insert using OpId
+            } else if (op.Delete) {
+                // TODO: Remove character by OpId
+            }
+        }
+
+        function updatePeers(peers) {
+            peersEl.innerHTML = peers.map(p =>
+                `<span class="peer" style="border-left: 3px solid ${p.color}">${p.name}</span>`
+            ).join('');
+        }
+
         editor.addEventListener('input', (e) => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
+            if (ws && ws.readyState === WebSocket.OPEN && e.data) {
                 ws.send(JSON.stringify({
                     Op: {
-                        Insert: {
-                            id: { peer: peerId, clock: Date.now() },
-                            after: null,
-                            content: e.data || ''
+                        op: {
+                            Insert: {
+                                id: { peer: peerId || crypto.randomUUID(), clock: Date.now() },
+                                after: null,
+                                content: e.data
+                            }
                         }
                     }
                 }));

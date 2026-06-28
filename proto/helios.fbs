@@ -1,0 +1,58 @@
+namespace HeliosProto;
+
+table OpId {
+  peer_id: [ubyte];
+  clock: ulong;
+}
+
+table InsertOp {
+  id: OpId;
+  after: OpId;
+  content: ulong;
+}
+
+table DeleteOp {
+  target: OpId;
+}
+
+table SetKeyOp {
+  map_id: OpId;
+  key: string;
+  value_string: string;
+  value_bool: bool;
+  value_number: double;
+  value_type: ubyte;
+  ts: ulong;
+}
+
+union OpUnion {
+  InsertOp,
+  DeleteOp,
+  SetKeyOp,
+}
+
+table Op {
+  op_type: OpUnion;
+  seq: ulong;
+}
+
+table ClientMessage {
+  message_type: ubyte;
+  join_document_id: string;
+  op: Op;
+  sync_since_seq: ulong;
+  presence_cursor_op: OpId;
+  presence_name: string;
+  presence_color: string;
+}
+
+table ServerMessage {
+  message_type: ubyte;
+  op: Op;
+  sync_ops: [Op];
+  sync_current_seq: ulong;
+  error_message: string;
+  peer_id: [ubyte];
+}
+
+root_type ClientMessage;
