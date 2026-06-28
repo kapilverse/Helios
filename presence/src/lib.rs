@@ -79,13 +79,7 @@ mod tests {
         let mut map = PresenceMap::new(5000);
         let peer = Uuid::new_v4();
 
-        map.update(
-            peer,
-            "Alice".to_string(),
-            "#ff0000".to_string(),
-            None,
-            1000,
-        );
+        map.update(peer, "Alice".to_string(), "#ff0000".to_string(), None, 1000);
 
         let entry = map.get(&peer).unwrap();
         assert_eq!(entry.name, "Alice");

@@ -15,18 +15,10 @@ pub struct SyncResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
-    Join {
-        document_id: String,
-    },
-    Op {
-        op: Op,
-    },
-    Sync {
-        request: SyncRequest,
-    },
-    Presence {
-        cursor: Option<CursorPosition>,
-    },
+    Join { document_id: String },
+    Op { op: Op },
+    Sync { request: SyncRequest },
+    Presence { cursor: Option<CursorPosition> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,19 +30,10 @@ pub struct CursorPosition {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
-    Op {
-        op: Op,
-        seq: u64,
-    },
-    Sync {
-        response: SyncResponse,
-    },
-    Presence {
-        peers: Vec<CursorPosition>,
-    },
-    Error {
-        message: String,
-    },
+    Op { op: Op, seq: u64 },
+    Sync { response: SyncResponse },
+    Presence { peers: Vec<CursorPosition> },
+    Error { message: String },
 }
 
 #[derive(Debug, Clone)]

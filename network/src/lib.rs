@@ -73,7 +73,11 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     state.peers.write().await.insert(peer_id, tx);
 
     // Initialize sync state
-    state.sync_states.write().await.insert(peer_id, SyncState::new());
+    state
+        .sync_states
+        .write()
+        .await
+        .insert(peer_id, SyncState::new());
 
     // Add to presence
     state.presence.write().await.update(
@@ -91,13 +95,14 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             ops: vec![],
             current_seq,
         },
-    }).unwrap();
-    let _ = ws_sender.send(Message::Text(welcome.into())).await;
+    })
+    .unwrap();
+    let _ = ws_sender.send(Message::Text(welcome)).await;
 
     // Spawn writer task
     tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
-            if ws_sender.send(Message::Text(msg.into())).await.is_err() {
+            if ws_sender.send(Message::Text(msg)).await.is_err() {
                 break;
             }
         }
@@ -135,7 +140,8 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                     let server_msg = serde_json::to_string(&ServerMessage::Op {
                         op: corrected_op,
                         seq: current_seq,
-                    }).unwrap();
+                    })
+                    .unwrap();
                     state.broadcast(Some(peer_id), &server_msg).await;
                 }
             }
@@ -153,12 +159,14 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                     .collect();
 
                 let response = serde_json::to_string(&ServerMessage::Sync {
-                    response: helios_sync::SyncResponse {
-                        ops,
-                        current_seq,
-                    },
-                }).unwrap();
-                let _ = state.peers.read().await.get(&peer_id)
+                    response: helios_sync::SyncResponse { ops, current_seq },
+                })
+                .unwrap();
+                let _ = state
+                    .peers
+                    .read()
+                    .await
+                    .get(&peer_id)
                     .map(|tx| tx.try_send(response));
             }
 
@@ -184,9 +192,8 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                     .collect();
                 drop(peers);
 
-                let presence_msg = serde_json::to_string(&ServerMessage::Presence {
-                    peers: all_peers,
-                }).unwrap();
+                let presence_msg =
+                    serde_json::to_string(&ServerMessage::Presence { peers: all_peers }).unwrap();
                 state.broadcast(None, &presence_msg).await;
             }
         }
@@ -210,8 +217,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         .collect();
     drop(peers);
 
-    let presence_msg = serde_json::to_string(&ServerMessage::Presence {
-        peers: all_peers,
-    }).unwrap();
+    let presence_msg =
+        serde_json::to_string(&ServerMessage::Presence { peers: all_peers }).unwrap();
     state.broadcast(None, &presence_msg).await;
 }

@@ -81,7 +81,12 @@ impl SequenceCrdt {
         match op {
             Op::Insert { id, after, content } => {
                 let pos = self.find_insert_position(after, id);
-                let element = Element { id, after, content, deleted: false };
+                let element = Element {
+                    id,
+                    after,
+                    content,
+                    deleted: false,
+                };
                 self.elements.insert(pos, element);
                 self.rebuild_index();
             }
@@ -95,7 +100,11 @@ impl SequenceCrdt {
     }
 
     pub fn as_string(&self) -> String {
-        self.elements.iter().filter(|e| !e.deleted).map(|e| e.content).collect()
+        self.elements
+            .iter()
+            .filter(|e| !e.deleted)
+            .map(|e| e.content)
+            .collect()
     }
 
     pub fn len(&self) -> usize {
@@ -110,7 +119,8 @@ impl SequenceCrdt {
     /// insert in (peer_id, clock) sorted order for determinism.
     fn find_insert_position(&self, after: Option<OpId>, new_id: OpId) -> usize {
         // Find all elements with the same 'after' value (siblings)
-        let siblings: Vec<(usize, &Element)> = self.elements
+        let siblings: Vec<(usize, &Element)> = self
+            .elements
             .iter()
             .enumerate()
             .filter(|(_, e)| !e.deleted && e.after == after)
@@ -334,19 +344,43 @@ mod tests {
 
         // Both insert at start, then each appends
         let ops1 = vec![
-            Op::Insert { id: OpId::new(peer1, 1), after: None, content: 'X' },
-            Op::Insert { id: OpId::new(peer1, 2), after: Some(OpId::new(peer1, 1)), content: 'Y' },
+            Op::Insert {
+                id: OpId::new(peer1, 1),
+                after: None,
+                content: 'X',
+            },
+            Op::Insert {
+                id: OpId::new(peer1, 2),
+                after: Some(OpId::new(peer1, 1)),
+                content: 'Y',
+            },
         ];
         let ops2 = vec![
-            Op::Insert { id: OpId::new(peer2, 1), after: None, content: 'A' },
-            Op::Insert { id: OpId::new(peer2, 2), after: Some(OpId::new(peer2, 1)), content: 'B' },
+            Op::Insert {
+                id: OpId::new(peer2, 1),
+                after: None,
+                content: 'A',
+            },
+            Op::Insert {
+                id: OpId::new(peer2, 2),
+                after: Some(OpId::new(peer2, 1)),
+                content: 'B',
+            },
         ];
 
-        for op in &ops1 { doc1.apply(op.clone()); }
-        for op in &ops2 { doc1.apply(op.clone()); }
+        for op in &ops1 {
+            doc1.apply(op.clone());
+        }
+        for op in &ops2 {
+            doc1.apply(op.clone());
+        }
 
-        for op in &ops2 { doc2.apply(op.clone()); }
-        for op in &ops1 { doc2.apply(op.clone()); }
+        for op in &ops2 {
+            doc2.apply(op.clone());
+        }
+        for op in &ops1 {
+            doc2.apply(op.clone());
+        }
 
         // Both must have all 4 characters
         let c1 = doc1.content();
@@ -401,14 +435,22 @@ mod tests {
                     clock1 += 1;
                     all_ops.push(Op::Insert {
                         id: OpId::new(peer1, clock1),
-                        after: if clock1 == 1 { None } else { Some(OpId::new(peer1, clock1 - 1)) },
+                        after: if clock1 == 1 {
+                            None
+                        } else {
+                            Some(OpId::new(peer1, clock1 - 1))
+                        },
                         content: rng.gen::<char>(),
                     });
                 } else {
                     clock2 += 1;
                     all_ops.push(Op::Insert {
                         id: OpId::new(peer2, clock2),
-                        after: if clock2 == 1 { None } else { Some(OpId::new(peer2, clock2 - 1)) },
+                        after: if clock2 == 1 {
+                            None
+                        } else {
+                            Some(OpId::new(peer2, clock2 - 1))
+                        },
                         content: rng.gen::<char>(),
                     });
                 }
@@ -416,11 +458,15 @@ mod tests {
 
             let mut shuffled = all_ops.clone();
             shuffled.shuffle(&mut rng);
-            for op in &shuffled { doc1.apply(op.clone()); }
+            for op in &shuffled {
+                doc1.apply(op.clone());
+            }
 
             let mut shuffled2 = all_ops;
             shuffled2.shuffle(&mut rng);
-            for op in &shuffled2 { doc2.apply(op.clone()); }
+            for op in &shuffled2 {
+                doc2.apply(op.clone());
+            }
 
             // Same multiset of characters
             let c1: Vec<char> = doc1.content().chars().collect();
