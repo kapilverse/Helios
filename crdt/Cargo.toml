@@ -1,0 +1,12 @@
+[package]
+name = "helios-crdt"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+rand = "0.8"
