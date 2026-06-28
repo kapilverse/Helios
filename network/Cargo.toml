@@ -1,0 +1,20 @@
+[package]
+name = "helios-network"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+helios-crdt = { path = "../crdt" }
+helios-ot-reconciler = { path = "../ot-reconciler" }
+helios-sync = { path = "../sync" }
+helios-presence = { path = "../presence" }
+helios-auth = { path = "../auth" }
+tokio = { workspace = true }
+axum = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+futures-util = "0.3"
