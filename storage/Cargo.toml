@@ -1,0 +1,10 @@
+[package]
+name = "helios-storage"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+helios-crdt = { path = "../crdt" }
+serde = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
