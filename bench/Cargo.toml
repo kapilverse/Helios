@@ -1,0 +1,8 @@
+[package]
+name = "helios-bench"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+helios-crdt = { path = "../crdt" }
+helios-ot-reconciler = { path = "../ot-reconciler" }
