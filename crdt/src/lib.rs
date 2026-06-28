@@ -94,7 +94,7 @@ impl SequenceCrdt {
         }
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn as_string(&self) -> String {
         self.elements.iter().filter(|e| !e.deleted).map(|e| e.content).collect()
     }
 
@@ -231,7 +231,7 @@ impl Document {
     }
 
     pub fn content(&self) -> String {
-        self.sequence.to_string()
+        self.sequence.as_string()
     }
 }
 
