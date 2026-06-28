@@ -11,7 +11,7 @@ use futures_util::{SinkExt, StreamExt};
 use helios_crdt::{Document, Op};
 use helios_ot_reconciler::OtReconciler;
 use helios_presence::PresenceMap;
-use helios_sync::{ClientMessage, CursorPosition, ServerMessage, SyncState};
+use helios_sync::{ClientMessage, ServerMessage, SyncState};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -45,6 +45,12 @@ impl AppState {
             }
         }
     }
+
+    async fn broadcast_presence(&self) {
+        let snapshots = self.presence.read().await.get_all_snapshots();
+        let msg = serde_json::to_string(&ServerMessage::Presence { peers: snapshots }).unwrap();
+        self.broadcast(None, &msg).await;
+    }
 }
 
 impl Default for AppState {
@@ -54,10 +60,36 @@ impl Default for AppState {
 }
 
 pub fn app(state: Arc<AppState>) -> Router {
+    // Spawn heartbeat cleanup task
+    let heartbeat_state = state.clone();
+    tokio::spawn(async move {
+        let interval = heartbeat_state.presence.read().await.heartbeat_timeout_ms();
+        let mut timer = tokio::time::interval(tokio::time::Duration::from_millis(interval / 2));
+        timer.tick().await;
+        loop {
+            timer.tick().await;
+            let now = timestamp_ms();
+            let removed = {
+                let mut presence = heartbeat_state.presence.write().await;
+                presence.cleanup_stale(now)
+            };
+            if !removed.is_empty() {
+                heartbeat_state.broadcast_presence().await;
+            }
+        }
+    });
+
     Router::new()
         .route("/ws", get(ws_handler))
         .route("/healthz", get(|| async { "ok" }))
         .with_state(state)
+}
+
+fn timestamp_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -68,27 +100,23 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let peer_id = Uuid::new_v4();
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
-    // Create channel for this peer
     let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(64);
     state.peers.write().await.insert(peer_id, tx);
 
-    // Initialize sync state
     state
         .sync_states
         .write()
         .await
         .insert(peer_id, SyncState::new());
 
-    // Add to presence
     state.presence.write().await.update(
         peer_id,
         format!("User-{}", &peer_id.to_string()[..8]),
         "#3b82f6".to_string(),
         None,
-        0,
+        timestamp_ms(),
     );
 
-    // Send welcome with current seq
     let current_seq = *state.op_seq.read().await;
     let welcome = serde_json::to_string(&ServerMessage::Sync {
         response: helios_sync::SyncResponse {
@@ -99,7 +127,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     .unwrap();
     let _ = ws_sender.send(Message::Text(welcome)).await;
 
-    // Spawn writer task
+    // Broadcast updated presence (new user joined)
+    state.broadcast_presence().await;
+
     tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
             if ws_sender.send(Message::Text(msg)).await.is_err() {
@@ -108,7 +138,6 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         }
     });
 
-    // Handle incoming messages
     while let Some(msg) = ws_receiver.next().await {
         let msg = match msg {
             Ok(Message::Text(text)) => text.to_string(),
@@ -170,54 +199,35 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                     .map(|tx| tx.try_send(response));
             }
 
-            ClientMessage::Presence { cursor } => {
-                let mut presence = state.presence.write().await;
-                presence.update(
-                    peer_id,
-                    format!("User-{}", &peer_id.to_string()[..8]),
-                    "#3b82f6".to_string(),
-                    cursor.and_then(|c| c.op_id),
-                    0,
-                );
+            ClientMessage::Presence {
+                cursor,
+                selection_start,
+                selection_end,
+                viewport_top,
+                viewport_bottom,
+            } => {
+                let now = timestamp_ms();
+                {
+                    let mut presence = state.presence.write().await;
+                    presence.update(
+                        peer_id,
+                        format!("User-{}", &peer_id.to_string()[..8]),
+                        "#3b82f6".to_string(),
+                        cursor,
+                        now,
+                    );
+                    presence.update_selection(&peer_id, selection_start, selection_end, now);
+                    presence.update_viewport(&peer_id, viewport_top, viewport_bottom, now);
+                }
 
-                let peers = state.presence.read().await;
-                let all_peers: Vec<CursorPosition> = peers
-                    .get_all()
-                    .iter()
-                    .map(|p| CursorPosition {
-                        op_id: p.cursor,
-                        name: p.name.clone(),
-                        color: p.color.clone(),
-                    })
-                    .collect();
-                drop(peers);
-
-                let presence_msg =
-                    serde_json::to_string(&ServerMessage::Presence { peers: all_peers }).unwrap();
-                state.broadcast(None, &presence_msg).await;
+                state.broadcast_presence().await;
             }
         }
     }
 
-    // Cleanup on disconnect
     state.peers.write().await.remove(&peer_id);
     state.presence.write().await.remove(&peer_id);
     state.sync_states.write().await.remove(&peer_id);
 
-    // Broadcast presence update (user left)
-    let peers = state.presence.read().await;
-    let all_peers: Vec<CursorPosition> = peers
-        .get_all()
-        .iter()
-        .map(|p| CursorPosition {
-            op_id: p.cursor,
-            name: p.name.clone(),
-            color: p.color.clone(),
-        })
-        .collect();
-    drop(peers);
-
-    let presence_msg =
-        serde_json::to_string(&ServerMessage::Presence { peers: all_peers }).unwrap();
-    state.broadcast(None, &presence_msg).await;
+    state.broadcast_presence().await;
 }

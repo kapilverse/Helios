@@ -1,4 +1,5 @@
-use helios_crdt::Op;
+use helios_crdt::{Op, OpId};
+pub use helios_presence::CursorPosition;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,17 +16,22 @@ pub struct SyncResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
-    Join { document_id: String },
-    Op { op: Op },
-    Sync { request: SyncRequest },
-    Presence { cursor: Option<CursorPosition> },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CursorPosition {
-    pub op_id: Option<helios_crdt::OpId>,
-    pub name: String,
-    pub color: String,
+    Join {
+        document_id: String,
+    },
+    Op {
+        op: Op,
+    },
+    Sync {
+        request: SyncRequest,
+    },
+    Presence {
+        cursor: Option<OpId>,
+        selection_start: Option<OpId>,
+        selection_end: Option<OpId>,
+        viewport_top: Option<OpId>,
+        viewport_bottom: Option<OpId>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

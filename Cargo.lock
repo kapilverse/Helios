@@ -361,6 +361,7 @@ name = "helios-sync"
 version = "0.1.0"
 dependencies = [
  "helios-crdt",
+ "helios-presence",
  "serde",
  "thiserror",
 ]
