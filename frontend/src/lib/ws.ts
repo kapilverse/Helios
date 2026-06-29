@@ -128,6 +128,21 @@ export class HeliosClient {
     });
   }
 
+  nextOpId(): OpId {
+    this.clock += 1;
+    return { peer: this.peerId, clock: this.clock };
+  }
+
+  sendInsert(id: OpId, after: OpId | null, content: string) {
+    const op: Op = { Insert: { id, after, content } };
+    this.send({ Op: { op } });
+  }
+
+  sendDelete(target: OpId) {
+    const op: Op = { Delete: { target } };
+    this.send({ Op: { op } });
+  }
+
   get peerIdStr() {
     return this.peerId;
   }
