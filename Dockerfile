@@ -1,11 +1,11 @@
-FROM node:22-slim as frontend
+FROM node:22-slim AS frontend
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ .
 RUN npm run build
 
-FROM rust:1.78-slim as backend
+FROM rust:1.85-slim AS backend
 RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
