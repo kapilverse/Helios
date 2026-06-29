@@ -44,11 +44,10 @@ export function Editor({ content, cursors, onTextChange }: EditorProps) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {cursors.length === 0 && <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Only you</span>}
           {cursors.map((c, i) => (
-            <span key={i} className="cursor-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-glass)', borderRadius: 20, fontSize: 12, fontWeight: 500 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, boxShadow: `0 0 8px ${c.color}` }} />
-              <span>{c.name}</span>
+            <span key={i} className="cursor-tag" style={{ display: 'inline-flex', alignItems: 'center', fontSize: 13, fontWeight: 500, color: c.color }}>
+              {c.name}
               {(c.selectionStart != null && c.selectionEnd != null) ? (
-                <span style={{ color: 'var(--text-muted)' }}>
+                <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
                   {'cursor'}
                 </span>
               ) : null}
