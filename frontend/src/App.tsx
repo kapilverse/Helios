@@ -5,16 +5,14 @@ import { useHelios } from './hooks/useHelios';
 
 export default function App() {
   const [userName, setUserName] = useState<string | null>(null);
+  const [documentId, setDocumentId] = useState<string>('default');
 
-  const wsUrl =
-    window.location.protocol === 'https:'
-      ? `wss://${window.location.host}/ws`
-      : `ws://${window.location.hostname}:3000/ws`;
+  const wsUrl = `${window.location.origin.replace(/^http/, 'ws')}/ws`;
 
-  const { connected, content, cursors, applyLocalText } = useHelios(wsUrl);
+  const { connected, content, cursors, applyLocalText } = useHelios(wsUrl, documentId);
 
   if (!userName) {
-    return <Login onLogin={setUserName} />;
+    return <Login onLogin={(name, docId) => { setUserName(name); setDocumentId(docId); }} />;
   }
 
   return (
