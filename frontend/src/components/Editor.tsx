@@ -8,80 +8,74 @@ interface EditorProps {
 }
 
 export function Editor({ content, cursors, onInsert, onDelete }: EditorProps) {
-  const editorRef = useRef<HTMLDivElement>(null);
-  const lastContentRef = useRef('');
-  const ignoreNextInput = useRef(false);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const localContentRef = useRef('');
+  const isLocalChange = useRef(false);
 
+  // Only sync from server when it's NOT a local change
   useEffect(() => {
-    if (!editorRef.current) return;
-    const el = editorRef.current;
-
-    // Save cursor position before updating content
-    const sel = window.getSelection();
-    let savedOffset = 0;
-    if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
-      const range = sel.getRangeAt(0);
-      const preRange = document.createRange();
-      preRange.selectNodeContents(el);
-      preRange.setEnd(range.startContainer, range.startOffset);
-      savedOffset = preRange.toString().length;
-    } else {
-      savedOffset = el.textContent?.length ?? 0;
+    if (isLocalChange.current) {
+      isLocalChange.current = false;
+      return;
     }
-
-    // Only update if content actually changed
-    if (el.textContent !== content) {
-      ignoreNextInput.current = true;
-      el.textContent = content;
+    const el = textRef.current;
+    if (el && el.value !== content) {
+      const pos = el.selectionStart;
+      el.value = content;
+      el.setSelectionRange(pos, pos);
     }
-
-    // Restore cursor
-    if (el.firstChild && content.length > 0) {
-      const range = document.createRange();
-      const textNode = el.firstChild;
-      const pos = Math.min(savedOffset, textNode.textContent?.length ?? 0);
-      range.setStart(textNode, pos);
-      range.collapse(true);
-      sel?.removeAllRanges();
-      sel?.addRange(range);
-    }
-
-    lastContentRef.current = content;
+    localContentRef.current = content;
   }, [content]);
 
-  const getCursorPos = useCallback((): number => {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return editorRef.current?.textContent?.length ?? 0;
-    const range = sel.getRangeAt(0);
-    const preRange = document.createRange();
-    preRange.selectNodeContents(editorRef.current!);
-    preRange.setEnd(range.startContainer, range.startOffset);
-    return preRange.toString().length;
-  }, []);
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    const pos = el.selectionStart;
+    const val = el.value;
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Backspace') {
-      e.preventDefault();
-      const pos = getCursorPos();
-      if (pos > 0) onDelete(pos - 1);
+      if (pos > 0) {
+        e.preventDefault();
+        isLocalChange.current = true;
+        const newContent = val.slice(0, pos - 1) + val.slice(pos);
+        el.value = newContent;
+        el.setSelectionRange(pos - 1, pos - 1);
+        localContentRef.current = newContent;
+        onDelete(pos - 1);
+      }
       return;
     }
     if (e.key === 'Delete') {
-      e.preventDefault();
-      const pos = getCursorPos();
-      onDelete(pos);
+      if (pos < val.length) {
+        e.preventDefault();
+        isLocalChange.current = true;
+        const newContent = val.slice(0, pos) + val.slice(pos + 1);
+        el.value = newContent;
+        el.setSelectionRange(pos, pos);
+        localContentRef.current = newContent;
+        onDelete(pos);
+      }
       return;
     }
     if (e.key === 'Enter') {
       e.preventDefault();
-      onInsert(getCursorPos(), '\n');
+      isLocalChange.current = true;
+      const newContent = val.slice(0, pos) + '\n' + val.slice(pos);
+      el.value = newContent;
+      el.setSelectionRange(pos + 1, pos + 1);
+      localContentRef.current = newContent;
+      onInsert(pos, '\n');
       return;
     }
     if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
-      onInsert(getCursorPos(), e.key);
+      isLocalChange.current = true;
+      const newContent = val.slice(0, pos) + e.key + val.slice(pos);
+      el.value = newContent;
+      el.setSelectionRange(pos + 1, pos + 1);
+      localContentRef.current = newContent;
+      onInsert(pos, e.key);
     }
-  }, [getCursorPos, onInsert, onDelete]);
+  }, [onInsert, onDelete]);
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -94,11 +88,10 @@ export function Editor({ content, cursors, onInsert, onDelete }: EditorProps) {
           </span>
         ))}
       </div>
-      <div
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
+      <textarea
+        ref={textRef}
         onKeyDown={handleKeyDown}
+        placeholder="Start typing..."
         style={{
           flex: 1,
           padding: '16px',
@@ -108,11 +101,11 @@ export function Editor({ content, cursors, onInsert, onDelete }: EditorProps) {
           outline: 'none',
           background: '#1e293b',
           color: '#e2e8f0',
+          border: 'none',
           borderRadius: '0 0 8px 8px',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-all',
-          overflowY: 'auto',
-          minHeight: 200,
+          resize: 'none',
+          width: '100%',
+          boxSizing: 'border-box',
         }}
       />
     </div>
