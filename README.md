@@ -16,22 +16,9 @@ Two people open the document → both type at the same time → edits merge auto
 
 ## How To Run
 
-### Option 1: Docker (recommended)
+### Run manually
 
-```bash
-docker compose up --build
-```
-
-Open **http://localhost:3000** — enter your name and start typing. Open another browser tab to see real-time sync.
-
-### Option 2: Run manually
-
-**Terminal 1 — Start the Rust server:**
-```bash
-cargo run --bin helios-server
-```
-
-**Terminal 2 — Start the React frontend:**
+**Terminal — Start the React frontend:**
 ```bash
 cd frontend
 npm install
