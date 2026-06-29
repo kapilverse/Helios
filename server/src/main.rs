@@ -8,29 +8,33 @@ async fn main() -> anyhow::Result<()> {
     let _ = dotenvy::dotenv();
     tracing_subscriber::fmt::init();
 
-    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&db_url)
-        .await?;
-
-    sqlx::migrate!("./migrations").run(&pool).await?;
-    tracing::info!("Connected to Neon Postgres and applied migrations");
-
     let mut initial_doc = Document::new();
-    let records = sqlx::query("SELECT op_data FROM operations ORDER BY seq ASC")
-        .fetch_all(&pool)
-        .await?;
+    let db = match std::env::var("DATABASE_URL") {
+        Ok(db_url) => {
+            let pool = PgPoolOptions::new().max_connections(5).connect(&db_url).await?;
+            sqlx::migrate!("./migrations").run(&pool).await?;
+            tracing::info!("Connected to Neon Postgres and applied migrations");
 
-    for record in records {
-        let op_data: serde_json::Value = record.get("op_data");
-        if let Ok(op) = serde_json::from_value::<Op>(op_data) {
-            initial_doc.apply(op);
+            let records = sqlx::query("SELECT op_data FROM operations ORDER BY seq ASC")
+                .fetch_all(&pool)
+                .await?;
+
+            for record in records {
+                let op_data: serde_json::Value = record.get("op_data");
+                if let Ok(op) = serde_json::from_value::<Op>(op_data) {
+                    initial_doc.apply(op);
+                }
+            }
+            tracing::info!("Reconstructed document with {} ops", initial_doc.op_log.len());
+            Some(pool)
         }
-    }
-    tracing::info!("Reconstructed document with {} ops", initial_doc.op_log.len());
+        Err(_) => {
+            tracing::warn!("DATABASE_URL not set, running without persistence");
+            None
+        }
+    };
 
-    let state = Arc::new(AppState::new(pool, initial_doc));
+    let state = Arc::new(AppState::new(db, initial_doc));
 
     // Try to find static files directory
     let static_dir = ["frontend/dist", "static"]
