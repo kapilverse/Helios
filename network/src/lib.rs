@@ -18,7 +18,7 @@ use tower_http::services::ServeDir;
 use uuid::Uuid;
 
 pub struct AppState {
-    pub db: sqlx::PgPool,
+    pub db: Option<sqlx::PgPool>,
     pub document: RwLock<Document>,
     pub reconciler: OtReconciler,
     pub presence: RwLock<PresenceMap>,
@@ -28,7 +28,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(db: sqlx::PgPool, initial_document: Document) -> Self {
+    pub fn new(db: Option<sqlx::PgPool>, initial_document: Document) -> Self {
         let op_seq_val = initial_document.op_log.len() as u64;
         Self {
             db,
@@ -171,8 +171,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
                 for corrected_op in corrected {
                     // Save to PostgreSQL in background to avoid blocking the WS loop
-                    if let Ok(op_json) = serde_json::to_value(&corrected_op) {
-                        let db = state.db.clone();
+                    if let (Some(db), Ok(op_json)) = (state.db.clone(), serde_json::to_value(&corrected_op)) {
                         tokio::spawn(async move {
                             let _ = sqlx::query("INSERT INTO operations (op_data) VALUES ($1)")
                                 .bind(op_json)
