@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 
 interface LoginProps {
-  onLogin: (name: string) => void;
+  onLogin: (name: string, documentId: string) => void;
 }
 
 export function Login({ onLogin }: LoginProps) {
   const [name, setName] = useState('');
+  const [documentId, setDocumentId] = useState('default');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim()) {
-      onLogin(name.trim());
+      onLogin(name.trim(), documentId.trim() || 'default');
     }
   };
 
@@ -102,6 +103,25 @@ export function Login({ onLogin }: LoginProps) {
               onBlur={(e) => {
                 e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)';
                 e.target.style.boxShadow = 'none';
+              }}
+              />
+          </div>
+          <div style={{ position: 'relative', marginBottom: 24 }}>
+            <input
+              type="text"
+              placeholder="Document name"
+              value={documentId}
+              onChange={(e) => setDocumentId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '14px 16px',
+                background: 'rgba(15, 23, 42, 0.6)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 12,
+                color: '#fff',
+                fontSize: 15,
+                outline: 'none',
+                transition: 'all 0.3s ease',
               }}
             />
           </div>
