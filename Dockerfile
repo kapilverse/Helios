@@ -30,6 +30,6 @@ USER helios
 WORKDIR /home/helios
 COPY --from=backend /app/target/release/helios-server .
 COPY --from=frontend /app/dist static/
-EXPOSE 3000
+EXPOSE 5174
 ENV RUST_LOG=info
 CMD ["./helios-server"]
