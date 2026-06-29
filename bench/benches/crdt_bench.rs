@@ -18,7 +18,11 @@ fn bench_sequential_inserts(c: &mut Criterion) {
             for i in 0u64..1000 {
                 let op = Op::Insert {
                     id: OpId::new(peer, i + 1),
-                    after: if i == 0 { None } else { Some(OpId::new(peer, i)) },
+                    after: if i == 0 {
+                        None
+                    } else {
+                        Some(OpId::new(peer, i))
+                    },
                     content: 'a',
                 };
                 doc.apply(black_box(op));
@@ -119,7 +123,11 @@ fn bench_snapshot(c: &mut Criterion) {
             for i in 0u64..1000 {
                 let op = Op::Insert {
                     id: OpId::new(peer, i + 1),
-                    after: if i == 0 { None } else { Some(OpId::new(peer, i)) },
+                    after: if i == 0 {
+                        None
+                    } else {
+                        Some(OpId::new(peer, i))
+                    },
                     content: (b'a' + (i % 26) as u8) as char,
                 };
                 doc.apply(op.clone());
@@ -137,7 +145,11 @@ fn bench_load_from_snapshot(c: &mut Criterion) {
     for i in 0u64..5000 {
         let op = Op::Insert {
             id: OpId::new(peer, i + 1),
-            after: if i == 0 { None } else { Some(OpId::new(peer, i)) },
+            after: if i == 0 {
+                None
+            } else {
+                Some(OpId::new(peer, i))
+            },
             content: (b'a' + (i % 26) as u8) as char,
         };
         doc.apply(op.clone());
