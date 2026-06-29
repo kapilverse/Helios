@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { HeliosClient, ServerMessage, Op } from '../lib/ws';
+import { HeliosClient, ServerMessage, Op, OpId } from '../lib/ws';
 
 interface Cursor {
   name: string;
   color: string;
-  opId: { peer: string; clock: number } | null;
+  opId: OpId | null;
 }
 
 export function useHelios(url: string) {
@@ -12,6 +12,7 @@ export function useHelios(url: string) {
   const [connected, setConnected] = useState(false);
   const [content, setContent] = useState('');
   const [cursors, setCursors] = useState<Cursor[]>([]);
+  const contentRef = useRef('');
 
   useEffect(() => {
     const client = new HeliosClient(url);
@@ -20,16 +21,20 @@ export function useHelios(url: string) {
     const unsubscribe = client.onMessage((msg: ServerMessage) => {
       if (msg.Sync) {
         setConnected(true);
-        // Apply initial ops
         let text = '';
         for (const [, op] of msg.Sync.response.ops) {
           text = applyOp(text, op);
         }
-        if (text) setContent(text);
+        contentRef.current = text;
+        setContent(text);
       }
 
       if (msg.Op) {
-        setContent((prev) => applyOp(prev, msg.Op!.op));
+        setContent((prev) => {
+          const next = applyOp(prev, msg.Op!.op);
+          contentRef.current = next;
+          return next;
+        });
       }
 
       if (msg.Presence) {
@@ -51,19 +56,30 @@ export function useHelios(url: string) {
     };
   }, [url]);
 
-  const insertChar = useCallback((after: { peer: string; clock: number } | null, ch: string) => {
-    // Apply locally immediately (optimistic update)
-    setContent((prev) => prev + ch);
-    // Send to server
-    clientRef.current?.insertChar(after, ch);
+  const insertChar = useCallback((pos: number, ch: string) => {
+    // Optimistic local update
+    setContent((prev) => {
+      const next = prev.slice(0, pos) + ch + prev.slice(pos);
+      contentRef.current = next;
+      return next;
+    });
+    // Send to server (simplified — real CRDT would use OpId-based positioning)
+    clientRef.current?.insertChar(null, ch);
   }, []);
 
-  const deleteChar = useCallback((target: { peer: string; clock: number }) => {
-    setContent((prev) => prev.slice(0, -1));
-    clientRef.current?.deleteChar(target);
+  const deleteChar = useCallback((pos: number) => {
+    setContent((prev) => {
+      const next = prev.slice(0, pos) + prev.slice(pos + 1);
+      contentRef.current = next;
+      return next;
+    });
+    // simplified delete
+    if (contentRef.current.length > 0) {
+      clientRef.current?.deleteChar({ peer: '0', clock: 0 });
+    }
   }, []);
 
-  const sendPresence = useCallback((cursor: { peer: string; clock: number } | null) => {
+  const sendPresence = useCallback((cursor: OpId | null) => {
     clientRef.current?.sendPresence(cursor);
   }, []);
 
@@ -72,11 +88,13 @@ export function useHelios(url: string) {
 
 function applyOp(text: string, op: Op): string {
   if ('Insert' in op) {
-    const { content } = op.Insert;
-    return text + content;
+    const { content: ch } = op.Insert;
+    // Simple append — real CRDT would position by OpId
+    return text + ch;
   }
   if ('Delete' in op) {
-    return text;
+    // Simple last-char delete
+    return text.length > 0 ? text.slice(0, -1) : text;
   }
   return text;
 }

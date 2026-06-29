@@ -1,31 +1,86 @@
-import React, { useRef, useEffect, KeyboardEvent } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 
 interface EditorProps {
   content: string;
   cursors: { name: string; color: string }[];
-  onInsert: (after: { peer: string; clock: number } | null, ch: string) => void;
-  onDelete: (target: { peer: string; clock: number }) => void;
+  onInsert: (pos: number, ch: string) => void;
+  onDelete: (pos: number) => void;
 }
 
 export function Editor({ content, cursors, onInsert, onDelete }: EditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const cursorPosRef = useRef(0);
+  const composingRef = useRef(false);
 
   useEffect(() => {
-    if (editorRef.current && editorRef.current.textContent !== content) {
-      editorRef.current.textContent = content;
+    if (!editorRef.current) return;
+    const el = editorRef.current;
+
+    if (el.textContent !== content) {
+      const savedPos = cursorPosRef.current;
+      el.textContent = content;
+      // Restore cursor position
+      if (el.firstChild) {
+        const range = document.createRange();
+        const sel = window.getSelection();
+        const pos = Math.min(savedPos, el.textContent.length);
+        range.setStart(el.firstChild, pos);
+        range.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+        cursorPosRef.current = pos;
+      }
     }
   }, [content]);
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    e.preventDefault();
+  const updateCursorPos = useCallback(() => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      const preRange = document.createRange();
+      preRange.selectNodeContents(editorRef.current!);
+      preRange.setEnd(range.startContainer, range.startOffset);
+      cursorPosRef.current = preRange.toString().length;
+    }
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (composingRef.current) return;
+
+    updateCursorPos();
+    const pos = cursorPosRef.current;
+
     if (e.key === 'Backspace') {
-      // Simple delete last char
+      e.preventDefault();
+      if (pos > 0) {
+        onDelete(pos - 1);
+      }
       return;
     }
-    if (e.key.length === 1) {
-      onInsert(null, e.key);
+
+    if (e.key === 'Delete') {
+      e.preventDefault();
+      if (pos < content.length) {
+        onDelete(pos);
+      }
+      return;
     }
-  };
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      onInsert(pos, '\n');
+      return;
+    }
+
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      onInsert(pos, e.key);
+    }
+  }, [content, onInsert, onDelete, updateCursorPos]);
+
+  const handleInput = useCallback(() => {
+    updateCursorPos();
+  }, [updateCursorPos]);
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -44,14 +99,7 @@ export function Editor({ content, cursors, onInsert, onDelete }: EditorProps) {
               fontSize: 12,
             }}
           >
-            <span
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: c.color,
-              }}
-            />
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color }} />
             {c.name}
           </span>
         ))}
@@ -61,6 +109,9 @@ export function Editor({ content, cursors, onInsert, onDelete }: EditorProps) {
         contentEditable
         suppressContentEditableWarning
         onKeyDown={handleKeyDown}
+        onInput={handleInput}
+        onClick={updateCursorPos}
+        onKeyUp={updateCursorPos}
         style={{
           flex: 1,
           padding: '16px',
@@ -72,7 +123,9 @@ export function Editor({ content, cursors, onInsert, onDelete }: EditorProps) {
           color: '#e2e8f0',
           borderRadius: '0 0 8px 8px',
           whiteSpace: 'pre-wrap',
+          wordBreak: 'break-all',
           overflowY: 'auto',
+          minHeight: 200,
         }}
       />
     </div>
