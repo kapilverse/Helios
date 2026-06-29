@@ -13,7 +13,7 @@ type PendingMessage =
   | { type: 'insert'; id: OpId; after: OpId | null; content: string }
   | { type: 'delete'; target: OpId };
 
-export function useHelios(url: string, documentId: string) {
+export function useHelios(url: string, documentId: string, name: string, color: string) {
   const clientRef = useRef<HeliosClient | null>(null);
   const [connected, setConnected] = useState(false);
   const [content, setContent] = useState('');
@@ -24,7 +24,7 @@ export function useHelios(url: string, documentId: string) {
   const lastSeenSeqRef = useRef(0);
 
   useEffect(() => {
-    const client = new HeliosClient(url, documentId);
+    const client = new HeliosClient(url, documentId, name, color);
     client.setSyncSince(lastSeenSeqRef.current);
     clientRef.current = client;
 
@@ -125,7 +125,14 @@ export function useHelios(url: string, documentId: string) {
 
     client.connect();
 
+    const heartbeat = setInterval(() => {
+      if (clientRef.current) {
+        clientRef.current.sendPresence(null, null, null);
+      }
+    }, 2000);
+
     return () => {
+      clearInterval(heartbeat);
       unsubscribe();
       client.disconnect();
     };
