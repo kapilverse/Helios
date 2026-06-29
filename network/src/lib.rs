@@ -59,7 +59,13 @@ impl AppState {
             let rooms = self.rooms.read().await;
             rooms
                 .get(document_id)
-                .map(|room| room.presence.get_all().into_iter().map(|entry| entry.peer_id).collect::<Vec<_>>())
+                .map(|room| {
+                    room.presence
+                        .get_all()
+                        .into_iter()
+                        .map(|entry| entry.peer_id)
+                        .collect::<Vec<_>>()
+                })
                 .unwrap_or_default()
         };
         let peers = self.peers.read().await;
@@ -154,12 +160,14 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let mut current_document = "default".to_string();
     {
         let mut rooms = state.rooms.write().await;
-        let room = rooms.entry(current_document.clone()).or_insert_with(|| DocumentRoom {
-            document: Document::new(),
-            presence: PresenceMap::default(),
-            sync_states: HashMap::new(),
-            op_seq: 0,
-        });
+        let room = rooms
+            .entry(current_document.clone())
+            .or_insert_with(|| DocumentRoom {
+                document: Document::new(),
+                presence: PresenceMap::default(),
+                sync_states: HashMap::new(),
+                op_seq: 0,
+            });
         room.sync_states.insert(peer_id, SyncState::new());
         room.presence.update(
             peer_id,
@@ -202,9 +210,13 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         };
 
         match client_msg {
-            ClientMessage::Join { document_id, name, color } => {
+            ClientMessage::Join {
+                document_id,
+                name,
+                color,
+            } => {
                 let now = timestamp_ms();
-                
+
                 if document_id != current_document {
                     // Switch rooms
                     {
@@ -213,15 +225,19 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             room.presence.remove(&peer_id);
                             room.sync_states.remove(&peer_id);
                         }
-                        let room = rooms.entry(document_id.clone()).or_insert_with(|| DocumentRoom {
-                            document: Document::new(),
-                            presence: PresenceMap::default(),
-                            sync_states: HashMap::new(),
-                            op_seq: 0,
-                        });
+                        let room =
+                            rooms
+                                .entry(document_id.clone())
+                                .or_insert_with(|| DocumentRoom {
+                                    document: Document::new(),
+                                    presence: PresenceMap::default(),
+                                    sync_states: HashMap::new(),
+                                    op_seq: 0,
+                                });
                         room.sync_states.insert(peer_id, SyncState::new());
-                        room.presence.update(peer_id, name.clone(), color.clone(), None, now);
-                        
+                        room.presence
+                            .update(peer_id, name.clone(), color.clone(), None, now);
+
                         let current_seq = room.op_seq;
                         let welcome = serde_json::to_string(&ServerMessage::Sync {
                             response: helios_sync::SyncResponse {
@@ -237,9 +253,14 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             },
                         })
                         .unwrap();
-                        let _ = state.peers.read().await.get(&peer_id).map(|tx| tx.try_send(welcome));
+                        let _ = state
+                            .peers
+                            .read()
+                            .await
+                            .get(&peer_id)
+                            .map(|tx| tx.try_send(welcome));
                     }
-                    
+
                     current_document = document_id;
                 } else {
                     // Update name/color in current room
@@ -249,29 +270,37 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                         room.presence.update(peer_id, name, color, cursor, now);
                     }
                 }
-                
+
                 state.broadcast_presence(&current_document).await;
             }
 
             ClientMessage::Op { op } => {
                 let (corrected, current_seq) = {
                     let mut rooms = state.rooms.write().await;
-                    let room = rooms.entry(current_document.clone()).or_insert_with(|| DocumentRoom {
-                        document: Document::new(),
-                        presence: PresenceMap::default(),
-                        sync_states: HashMap::new(),
-                        op_seq: 0,
-                    });
+                    let room =
+                        rooms
+                            .entry(current_document.clone())
+                            .or_insert_with(|| DocumentRoom {
+                                document: Document::new(),
+                                presence: PresenceMap::default(),
+                                sync_states: HashMap::new(),
+                                op_seq: 0,
+                            });
                     room.op_seq += 1;
                     let current_seq = room.op_seq;
                     let last_op = room.document.op_log.ops().last().cloned();
-                    let corrected = state.reconciler.reconcile(&mut room.document, op, last_op.as_ref());
+                    let corrected =
+                        state
+                            .reconciler
+                            .reconcile(&mut room.document, op, last_op.as_ref());
                     (corrected, current_seq)
                 };
 
                 for corrected_op in corrected {
                     // Save to PostgreSQL in background to avoid blocking the WS loop
-                    if let (Some(db), Ok(op_json)) = (state.db.clone(), serde_json::to_value(&corrected_op)) {
+                    if let (Some(db), Ok(op_json)) =
+                        (state.db.clone(), serde_json::to_value(&corrected_op))
+                    {
                         tokio::spawn(async move {
                             let _ = sqlx::query("INSERT INTO operations (op_data) VALUES ($1)")
                                 .bind(op_json)
@@ -335,8 +364,18 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             let name = entry.name.clone();
                             let color = entry.color.clone();
                             room.presence.update(peer_id, name, color, cursor, now);
-                            room.presence.update_selection(&peer_id, selection_start, selection_end, now);
-                            room.presence.update_viewport(&peer_id, viewport_top, viewport_bottom, now);
+                            room.presence.update_selection(
+                                &peer_id,
+                                selection_start,
+                                selection_end,
+                                now,
+                            );
+                            room.presence.update_viewport(
+                                &peer_id,
+                                viewport_top,
+                                viewport_bottom,
+                                now,
+                            );
                         }
                     }
                 }
