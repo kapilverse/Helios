@@ -3,3 +3,5 @@ target/
 .github/
 *.md
 tests/
+**/node_modules/
+**/dist/
