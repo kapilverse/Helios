@@ -6,50 +6,141 @@
     <title>HELIOS</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
-        .container { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-        h1 { font-size: 1.5rem; margin-bottom: 1rem; color: #38bdf8; }
-        .status { padding: 0.5rem; margin-bottom: 1rem; border-radius: 4px; font-size: 0.875rem; }
-        .status.connected { background: #064e3b; color: #6ee7b7; }
-        .status.disconnected { background: #7f1d1d; color: #fca5a5; }
-        .status.syncing { background: #78350f; color: #fbbf24; }
-        #editor {
-            width: 100%;
-            min-height: 400px;
-            background: #1e293b;
-            color: #e2e8f0;
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 1rem;
-            font-family: 'SF Mono', monospace;
-            font-size: 14px;
-            resize: vertical;
-            outline: none;
-        }
-        #editor:focus { border-color: #38bdf8; }
-        .peers { margin-top: 1rem; font-size: 0.875rem; color: #94a3b8; }
-        .peer { display: inline-block; margin-right: 0.5rem; padding: 0.25rem 0.5rem; background: #334155; border-radius: 4px; }
+        body { min-height: 100vh; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+        header { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid #233047; background: #0b1224; }
+        h1 { font-size: 1.35rem; color: #38bdf8; }
+        .status { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 5px; font-size: 0.875rem; background: #7f1d1d; color: #fecaca; }
+        .status.connected { background: #065f46; color: #a7f3d0; }
+        .user { color: #bfdbfe; font-size: 0.9rem; }
+        .peers { min-height: 44px; padding: 12px 20px; border-bottom: 1px solid #334155; color: #cbd5e1; }
+        .peer { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; font-size: 0.85rem; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #3b82f6; }
+        #editor { width: 100%; height: calc(100vh - 109px); padding: 24px 20px; border: 0; outline: none; resize: none; background: #1e293b; color: #f8fafc; font: 16px/1.7 "SF Mono", Consolas, monospace; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>HELIOS</h1>
-        <div id="status" class="status disconnected">Disconnected</div>
-        <textarea id="editor" placeholder="Start typing..."></textarea>
-        <div class="peers" id="peers"></div>
-    </div>
+    <header>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <h1>HELIOS</h1>
+            <div id="status" class="status">Disconnected</div>
+        </div>
+        <div id="user" class="user"></div>
+    </header>
+    <div class="peers">Cursors: <span id="peers"></span></div>
+    <textarea id="editor" placeholder="Start typing..."></textarea>
+
     <script>
         const editor = document.getElementById('editor');
         const statusEl = document.getElementById('status');
         const peersEl = document.getElementById('peers');
+        const userEl = document.getElementById('user');
+
+        const peerId = crypto.randomUUID();
+        const userName = localStorage.getItem('helios-name') || prompt('Enter your name') || 'Anonymous';
+        localStorage.setItem('helios-name', userName);
+        userEl.textContent = userName;
 
         let ws;
-        let peerId = null;
-        let syncSeq = 0;
+        let clock = 0;
+        let text = '';
+        let charIds = [];
+        let applyingRemote = false;
 
-        function setStatus(text, cls) {
-            statusEl.textContent = text;
-            statusEl.className = 'status ' + cls;
+        function sameId(a, b) {
+            return a && b && a.peer === b.peer && a.clock === b.clock;
+        }
+
+        function setStatus(value, connected) {
+            statusEl.textContent = value;
+            statusEl.className = connected ? 'status connected' : 'status';
+        }
+
+        function nextOpId() {
+            clock += 1;
+            return { peer: peerId, clock };
+        }
+
+        function setEditorValue(nextText, caret = editor.selectionStart) {
+            applyingRemote = true;
+            text = nextText;
+            editor.value = nextText;
+            const safeCaret = Math.min(caret, nextText.length);
+            editor.setSelectionRange(safeCaret, safeCaret);
+            applyingRemote = false;
+        }
+
+        function insertLocal(pos, content) {
+            for (const ch of content) {
+                const id = nextOpId();
+                const after = pos > 0 ? charIds[pos - 1] : null;
+                charIds.splice(pos, 0, id);
+                ws.send(JSON.stringify({ Op: { op: { Insert: { id, after, content: ch } } } }));
+                pos += 1;
+            }
+        }
+
+        function deleteLocal(pos, count) {
+            for (let i = 0; i < count; i += 1) {
+                const target = charIds[pos];
+                if (!target) return;
+                charIds.splice(pos, 1);
+                ws.send(JSON.stringify({ Op: { op: { Delete: { target } } } }));
+            }
+        }
+
+        function findInsertPos(after) {
+            if (!after) return 0;
+            const idx = charIds.findIndex((id) => sameId(id, after));
+            return idx === -1 ? charIds.length : idx + 1;
+        }
+
+        function applyOp(op) {
+            if (op.Insert) {
+                if (charIds.some((id) => sameId(id, op.Insert.id))) return;
+                const pos = findInsertPos(op.Insert.after);
+                charIds.splice(pos, 0, op.Insert.id);
+                setEditorValue(text.slice(0, pos) + op.Insert.content + text.slice(pos));
+            } else if (op.Delete) {
+                const pos = charIds.findIndex((id) => sameId(id, op.Delete.target));
+                if (pos === -1) return;
+                charIds.splice(pos, 1);
+                setEditorValue(text.slice(0, pos) + text.slice(pos + 1));
+            }
+        }
+
+        function rebuildFromOps(ops) {
+            text = '';
+            charIds = [];
+            editor.value = '';
+            for (const [, op] of ops) applyOp(op);
+        }
+
+        function diffAndSend(nextText) {
+            if (applyingRemote || nextText === text || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+            let prefix = 0;
+            while (prefix < text.length && prefix < nextText.length && text[prefix] === nextText[prefix]) prefix += 1;
+
+            let suffix = 0;
+            while (
+                suffix < text.length - prefix &&
+                suffix < nextText.length - prefix &&
+                text[text.length - 1 - suffix] === nextText[nextText.length - 1 - suffix]
+            ) {
+                suffix += 1;
+            }
+
+            const removedCount = text.length - prefix - suffix;
+            const added = nextText.slice(prefix, nextText.length - suffix);
+            deleteLocal(prefix, removedCount);
+            insertLocal(prefix, added);
+            text = nextText;
+        }
+
+        function updatePeers(peers) {
+            peersEl.innerHTML = peers
+                .map((p) => `<span class="peer"><span class="dot" style="background:${p.color}"></span>${p.name}</span>`)
+                .join('');
         }
 
         function connect() {
@@ -57,73 +148,26 @@
             ws = new WebSocket(`${protocol}//${location.host}/ws`);
 
             ws.onopen = () => {
-                setStatus('Connected', 'connected');
+                setStatus('Connected', true);
                 ws.send(JSON.stringify({ Join: { document_id: 'default' } }));
             };
 
             ws.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
-
-                if (msg.Sync) {
-                    const resp = msg.Sync.response;
-                    syncSeq = resp.current_seq;
-
-                    // Apply any missed ops
-                    if (resp.ops) {
-                        for (const [seq, op] of resp.ops) {
-                            applyOp(op);
-                            syncSeq = Math.max(syncSeq, seq);
-                        }
-                    }
-                } else if (msg.Op) {
-                    applyOp(msg.Op.op);
-                    syncSeq = msg.Op.seq;
-                } else if (msg.Presence) {
-                    updatePeers(msg.Presence.peers);
-                }
+                if (msg.Sync) rebuildFromOps(msg.Sync.response.ops || []);
+                if (msg.Op) applyOp(msg.Op.op);
+                if (msg.Presence) updatePeers(msg.Presence.peers);
             };
 
             ws.onclose = () => {
-                setStatus('Disconnected — reconnecting...', 'disconnected');
+                setStatus('Disconnected', false);
                 setTimeout(connect, 2000);
             };
 
-            ws.onerror = () => {
-                setStatus('Error', 'disconnected');
-            };
+            ws.onerror = () => setStatus('Error', false);
         }
 
-        function applyOp(op) {
-            if (op.Insert) {
-                // For now, just append to editor
-                // TODO: Position-based insert using OpId
-            } else if (op.Delete) {
-                // TODO: Remove character by OpId
-            }
-        }
-
-        function updatePeers(peers) {
-            peersEl.innerHTML = peers.map(p =>
-                `<span class="peer" style="border-left: 3px solid ${p.color}">${p.name}</span>`
-            ).join('');
-        }
-
-        editor.addEventListener('input', (e) => {
-            if (ws && ws.readyState === WebSocket.OPEN && e.data) {
-                ws.send(JSON.stringify({
-                    Op: {
-                        op: {
-                            Insert: {
-                                id: { peer: peerId || crypto.randomUUID(), clock: Date.now() },
-                                after: null,
-                                content: e.data
-                            }
-                        }
-                    }
-                }));
-            }
-        });
-
+        editor.addEventListener('input', () => diffAndSend(editor.value));
         connect();
     </script>
 </body>
