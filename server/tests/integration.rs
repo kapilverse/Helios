@@ -44,9 +44,7 @@ async fn recv_msg(ws: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> Value 
     }
 }
 
-async fn drain_until_op(
-    ws: &mut WebSocketStream<MaybeTlsStream<TcpStream>>,
-) -> Value {
+async fn drain_until_op(ws: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> Value {
     loop {
         let msg = recv_msg(ws).await;
         if msg.get("Op").is_some() {
@@ -57,7 +55,9 @@ async fn drain_until_op(
 
 async fn send_msg(ws: &mut WebSocketStream<MaybeTlsStream<TcpStream>>, msg: Value) {
     let text = serde_json::to_string(&msg).unwrap();
-    ws.send(Message::Text(text.into())).await.expect("Send failed");
+    ws.send(Message::Text(text.into()))
+        .await
+        .expect("Send failed");
 }
 
 #[tokio::test]
