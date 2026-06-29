@@ -7,18 +7,13 @@ interface Cursor {
   opId: OpId | null;
 }
 
-interface CharEntry {
-  id: OpId;
-  after: OpId | null;
-  ch: string;
-}
-
 export function useHelios(url: string) {
   const clientRef = useRef<HeliosClient | null>(null);
   const [connected, setConnected] = useState(false);
   const [content, setContent] = useState('');
   const [cursors, setCursors] = useState<Cursor[]>([]);
-  const entriesRef = useRef<CharEntry[]>([]);
+  const contentRef = useRef('');
+  const charIdsRef = useRef<OpId[]>([]);
 
   useEffect(() => {
     const client = new HeliosClient(url);
@@ -27,21 +22,48 @@ export function useHelios(url: string) {
     const unsubscribe = client.onMessage((msg: ServerMessage) => {
       if (msg.Sync) {
         setConnected(true);
-        const entries: CharEntry[] = [];
+        let text = '';
+        const ids: OpId[] = [];
         for (const [, op] of msg.Sync.response.ops) {
-          const entry = applyOpToEntries(entries, op);
-          if (entry) entries.push(entry);
+          if ('Insert' in op) {
+            text += op.Insert.content;
+            ids.push(op.Insert.id);
+          }
         }
-        entriesRef.current = entries;
-        setContent(entries.map((e) => e.ch).join(''));
+        contentRef.current = text;
+        charIdsRef.current = ids;
+        setContent(text);
       }
 
       if (msg.Op) {
-        const entries = [...entriesRef.current];
-        const entry = applyOpToEntries(entries, msg.Op.op);
-        if (entry) entries.push(entry);
-        entriesRef.current = entries;
-        setContent(entries.map((e) => e.ch).join(''));
+        const op = msg.Op.op;
+        if ('Insert' in op) {
+          // Find position: after the character with matching OpId
+          const afterId = op.Insert.after;
+          let pos = contentRef.current.length;
+          if (afterId) {
+            const idx = charIdsRef.current.findIndex(
+              (id) => id.peer === afterId.peer && id.clock === afterId.clock
+            );
+            if (idx !== -1) pos = idx + 1;
+          }
+          contentRef.current =
+            contentRef.current.slice(0, pos) +
+            op.Insert.content +
+            contentRef.current.slice(pos);
+          charIdsRef.current.splice(pos, 0, op.Insert.id);
+          setContent(contentRef.current);
+        } else if ('Delete' in op) {
+          const idx = charIdsRef.current.findIndex(
+            (id) => id.peer === op.Delete.target.peer && id.clock === op.Delete.target.clock
+          );
+          if (idx !== -1) {
+            contentRef.current =
+              contentRef.current.slice(0, idx) + contentRef.current.slice(idx + 1);
+            charIdsRef.current.splice(idx, 1);
+            setContent(contentRef.current);
+          }
+        }
       }
 
       if (msg.Presence) {
@@ -64,34 +86,30 @@ export function useHelios(url: string) {
   }, [url]);
 
   const insertChar = useCallback((pos: number, ch: string) => {
-    const entries = entriesRef.current;
-    const afterId = pos > 0 ? entries[pos - 1]?.id ?? null : null;
+    const afterId = pos > 0 ? charIdsRef.current[pos - 1] ?? null : null;
+    const id = clientRef.current!.nextOpId();
 
-    const newEntry: CharEntry = {
-      id: clientRef.current!.nextOpId(),
-      after: afterId,
-      ch,
-    };
-
-    // Insert at correct position
-    entries.splice(pos, 0, newEntry);
-    entriesRef.current = entries;
-    setContent(entries.map((e) => e.ch).join(''));
+    // Optimistic local update
+    contentRef.current =
+      contentRef.current.slice(0, pos) + ch + contentRef.current.slice(pos);
+    charIdsRef.current.splice(pos, 0, id);
+    setContent(contentRef.current);
 
     // Send to server
-    clientRef.current?.sendInsert(newEntry.id, newEntry.after, ch);
+    clientRef.current?.sendInsert(id, afterId, ch);
   }, []);
 
   const deleteChar = useCallback((pos: number) => {
-    const entries = entriesRef.current;
-    if (pos < 0 || pos >= entries.length) return;
+    if (pos < 0 || pos >= charIdsRef.current.length) return;
+    const target = charIdsRef.current[pos];
 
-    const target = entries[pos];
-    entries.splice(pos, 1);
-    entriesRef.current = entries;
-    setContent(entries.map((e) => e.ch).join(''));
+    // Optimistic local update
+    contentRef.current =
+      contentRef.current.slice(0, pos) + contentRef.current.slice(pos + 1);
+    charIdsRef.current.splice(pos, 1);
+    setContent(contentRef.current);
 
-    clientRef.current?.sendDelete(target.id);
+    clientRef.current?.sendDelete(target);
   }, []);
 
   const sendPresence = useCallback((cursor: OpId | null) => {
@@ -99,16 +117,4 @@ export function useHelios(url: string) {
   }, []);
 
   return { connected, content, cursors, insertChar, deleteChar, sendPresence };
-}
-
-function applyOpToEntries(entries: CharEntry[], op: Op): CharEntry | null {
-  if ('Insert' in op) {
-    const { id, after, content: ch } = op.Insert;
-    return { id, after, ch };
-  }
-  if ('Delete' in op) {
-    const idx = entries.findIndex((e) => e.id.peer === op.Delete.target.peer && e.id.clock === op.Delete.target.clock);
-    if (idx !== -1) entries.splice(idx, 1);
-  }
-  return null;
 }
