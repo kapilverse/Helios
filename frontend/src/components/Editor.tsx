@@ -79,35 +79,52 @@ export function Editor({ content, cursors, onInsert, onDelete }: EditorProps) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '8px 16px', borderBottom: '1px solid #334155', display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ color: '#94a3b8', fontSize: 14 }}>Cursors:</span>
-        {cursors.map((c, i) => (
-          <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', background: '#1e293b', borderRadius: 4, fontSize: 12 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color }} />
-            {c.name}
-          </span>
-        ))}
+      <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-glass)', display: 'flex', gap: 12, alignItems: 'center', background: 'rgba(15, 23, 42, 0.4)' }}>
+        <span style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          Collaborators:
+        </span>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {cursors.length === 0 && <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Only you</span>}
+          {cursors.map((c, i) => (
+            <span key={i} className="cursor-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-glass)', borderRadius: 20, fontSize: 12, fontWeight: 500 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, boxShadow: `0 0 8px ${c.color}` }} />
+              {c.name}
+            </span>
+          ))}
+        </div>
       </div>
-      <textarea
-        ref={textRef}
-        onKeyDown={handleKeyDown}
-        placeholder="Start typing..."
-        style={{
-          flex: 1,
-          padding: '16px',
-          fontFamily: "'SF Mono', 'Fira Code', monospace",
-          fontSize: 14,
-          lineHeight: 1.6,
-          outline: 'none',
-          background: '#1e293b',
-          color: '#e2e8f0',
-          border: 'none',
-          borderRadius: '0 0 8px 8px',
-          resize: 'none',
-          width: '100%',
-          boxSizing: 'border-box',
-        }}
-      />
+      <div style={{ flex: 1, position: 'relative' }}>
+        <textarea
+          ref={textRef}
+          onKeyDown={handleKeyDown}
+          placeholder="Start typing your document..."
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            padding: '24px 32px',
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            fontSize: 15,
+            lineHeight: 1.7,
+            outline: 'none',
+            background: 'transparent',
+            color: 'var(--text-main)',
+            border: 'none',
+            resize: 'none',
+            width: '100%',
+            height: '100%',
+            boxSizing: 'border-box',
+          }}
+        />
+      </div>
     </div>
   );
 }
