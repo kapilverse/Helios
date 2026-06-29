@@ -170,14 +170,15 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 drop(seq);
 
                 for corrected_op in corrected {
-                    // Save to PostgreSQL
+                    // Save to PostgreSQL in background to avoid blocking the WS loop
                     if let Ok(op_json) = serde_json::to_value(&corrected_op) {
-                        let _ = sqlx::query(
-                            "INSERT INTO operations (op_data) VALUES ($1)",
-                        )
-                        .bind(op_json)
-                        .execute(&state.db)
-                        .await;
+                        let db = state.db.clone();
+                        tokio::spawn(async move {
+                            let _ = sqlx::query("INSERT INTO operations (op_data) VALUES ($1)")
+                                .bind(op_json)
+                                .execute(&db)
+                                .await;
+                        });
                     }
 
                     let server_msg = serde_json::to_string(&ServerMessage::Op {

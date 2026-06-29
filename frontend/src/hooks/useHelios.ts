@@ -26,8 +26,25 @@ export function useHelios(url: string) {
         const ids: OpId[] = [];
         for (const [, op] of msg.Sync.response.ops) {
           if ('Insert' in op) {
-            text += op.Insert.content;
-            ids.push(op.Insert.id);
+            const afterId = op.Insert.after;
+            let pos = 0;
+            if (afterId) {
+              const idx = ids.findIndex(
+                (id) => id.peer === afterId.peer && id.clock === afterId.clock
+              );
+              if (idx !== -1) pos = idx + 1;
+              else pos = ids.length;
+            }
+            text = text.slice(0, pos) + op.Insert.content + text.slice(pos);
+            ids.splice(pos, 0, op.Insert.id);
+          } else if ('Delete' in op) {
+            const idx = ids.findIndex(
+              (id) => id.peer === op.Delete.target.peer && id.clock === op.Delete.target.clock
+            );
+            if (idx !== -1) {
+              text = text.slice(0, idx) + text.slice(idx + 1);
+              ids.splice(idx, 1);
+            }
           }
         }
         contentRef.current = text;
@@ -43,12 +60,13 @@ export function useHelios(url: string) {
           if (op.Insert.id.peer !== myPeerId) {
             // Find position: after the character with matching OpId
             const afterId = op.Insert.after;
-            let pos = contentRef.current.length;
+            let pos = 0;
             if (afterId) {
               const idx = charIdsRef.current.findIndex(
                 (id) => id.peer === afterId.peer && id.clock === afterId.clock
               );
               if (idx !== -1) pos = idx + 1;
+              else pos = contentRef.current.length; // fallback
             }
             contentRef.current =
               contentRef.current.slice(0, pos) +
