@@ -5,23 +5,34 @@ interface Cursor {
   name: string;
   color: string;
   opId: OpId | null;
+  selectionStart?: OpId | null;
+  selectionEnd?: OpId | null;
 }
 
-export function useHelios(url: string) {
+type PendingMessage =
+  | { type: 'insert'; id: OpId; after: OpId | null; content: string }
+  | { type: 'delete'; target: OpId };
+
+export function useHelios(url: string, documentId: string) {
   const clientRef = useRef<HeliosClient | null>(null);
   const [connected, setConnected] = useState(false);
   const [content, setContent] = useState('');
   const [cursors, setCursors] = useState<Cursor[]>([]);
   const contentRef = useRef('');
   const charIdsRef = useRef<OpId[]>([]);
+  const pendingMessagesRef = useRef<PendingMessage[]>([]);
+  const lastSeenSeqRef = useRef(0);
 
   useEffect(() => {
-    const client = new HeliosClient(url);
+    const client = new HeliosClient(url, documentId);
+    client.setSyncSince(lastSeenSeqRef.current);
     clientRef.current = client;
 
     const unsubscribe = client.onMessage((msg: ServerMessage) => {
       if (msg.Sync) {
         setConnected(true);
+        lastSeenSeqRef.current = msg.Sync.response.current_seq;
+        client.setSyncSince(lastSeenSeqRef.current);
         let text = '';
         const ids: OpId[] = [];
         for (const [, op] of msg.Sync.response.ops) {
@@ -50,6 +61,17 @@ export function useHelios(url: string) {
         contentRef.current = text;
         charIdsRef.current = ids;
         setContent(text);
+        setConnected(true);
+        if (pendingMessagesRef.current.length > 0) {
+          for (const pending of pendingMessagesRef.current) {
+            if (pending.type === 'insert') {
+              client.sendInsert(pending.id, pending.after, pending.content);
+            } else {
+              client.sendDelete(pending.target);
+            }
+          }
+          pendingMessagesRef.current = [];
+        }
       }
 
       if (msg.Op) {
@@ -94,6 +116,8 @@ export function useHelios(url: string) {
             name: p.name,
             color: p.color,
             opId: p.op_id,
+            selectionStart: p.selection_start ?? null,
+            selectionEnd: p.selection_end ?? null,
           }))
         );
       }
@@ -105,7 +129,7 @@ export function useHelios(url: string) {
       unsubscribe();
       client.disconnect();
     };
-  }, [url]);
+  }, [url, documentId]);
 
   const insertChar = useCallback((pos: number, ch: string) => {
     const afterId = pos > 0 ? charIdsRef.current[pos - 1] ?? null : null;
@@ -118,8 +142,12 @@ export function useHelios(url: string) {
     setContent(contentRef.current);
 
     // Send to server
-    clientRef.current?.sendInsert(id, afterId, ch);
-  }, []);
+    pendingMessagesRef.current.push({ type: 'insert', id, after: afterId, content: ch });
+    if (connected) {
+      clientRef.current?.sendInsert(id, afterId, ch);
+      pendingMessagesRef.current.pop();
+    }
+  }, [connected]);
 
   const deleteChar = useCallback((pos: number) => {
     if (pos < 0 || pos >= charIdsRef.current.length) return;
@@ -131,14 +159,18 @@ export function useHelios(url: string) {
     charIdsRef.current.splice(pos, 1);
     setContent(contentRef.current);
 
-    clientRef.current?.sendDelete(target);
+    pendingMessagesRef.current.push({ type: 'delete', target });
+    if (connected) {
+      clientRef.current?.sendDelete(target);
+      pendingMessagesRef.current.pop();
+    }
+  }, [connected]);
+
+  const sendPresence = useCallback((cursor: OpId | null, selectionStart: OpId | null = null, selectionEnd: OpId | null = null) => {
+    clientRef.current?.sendPresence(cursor, selectionStart, selectionEnd);
   }, []);
 
-  const sendPresence = useCallback((cursor: OpId | null) => {
-    clientRef.current?.sendPresence(cursor);
-  }, []);
-
-  const applyLocalText = useCallback((nextContent: string, selectionStart: number | null) => {
+  const applyLocalText = useCallback((nextContent: string, selectionStart: number | null, selectionEnd: number | null) => {
     const current = contentRef.current;
     if (nextContent === current) return;
 
@@ -174,16 +206,18 @@ export function useHelios(url: string) {
     contentRef.current = nextContent;
     setContent(nextContent);
 
-    if (selectionStart != null) {
+    if (selectionStart != null || selectionEnd != null) {
       // Keep the browser caret where the user expects after React catches up.
       queueMicrotask(() => {
         const el = document.querySelector('textarea');
         if (el instanceof HTMLTextAreaElement) {
-          el.setSelectionRange(selectionStart, selectionStart);
+          const start = selectionStart ?? 0;
+          const end = selectionEnd ?? start;
+          el.setSelectionRange(start, end);
         }
       });
     }
-  }, [deleteChar, insertChar]);
+  }, [deleteChar, insertChar, connected]);
 
   return { connected, content, cursors, applyLocalText, sendPresence };
 }
