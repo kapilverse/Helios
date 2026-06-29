@@ -19,41 +19,69 @@ use uuid::Uuid;
 
 pub struct AppState {
     pub db: Option<sqlx::PgPool>,
-    pub document: RwLock<Document>,
-    pub reconciler: OtReconciler,
-    pub presence: RwLock<PresenceMap>,
-    pub sync_states: RwLock<HashMap<Uuid, SyncState>>,
-    pub op_seq: RwLock<u64>,
+    pub rooms: RwLock<HashMap<String, DocumentRoom>>,
+    pub peer_docs: RwLock<HashMap<Uuid, String>>,
     pub peers: RwLock<HashMap<Uuid, tokio::sync::mpsc::Sender<String>>>,
+    pub reconciler: OtReconciler,
+}
+
+pub struct DocumentRoom {
+    pub document: Document,
+    pub presence: PresenceMap,
+    pub sync_states: HashMap<Uuid, SyncState>,
+    pub op_seq: u64,
 }
 
 impl AppState {
     pub fn new(db: Option<sqlx::PgPool>, initial_document: Document) -> Self {
         let op_seq_val = initial_document.op_log.len() as u64;
+        let mut rooms = HashMap::new();
+        rooms.insert(
+            "default".to_string(),
+            DocumentRoom {
+                document: initial_document,
+                presence: PresenceMap::default(),
+                sync_states: HashMap::new(),
+                op_seq: op_seq_val,
+            },
+        );
         Self {
             db,
-            document: RwLock::new(initial_document),
-            reconciler: OtReconciler::new(),
-            presence: RwLock::new(PresenceMap::default()),
-            sync_states: RwLock::new(HashMap::new()),
-            op_seq: RwLock::new(op_seq_val),
+            rooms: RwLock::new(rooms),
+            peer_docs: RwLock::new(HashMap::new()),
             peers: RwLock::new(HashMap::new()),
+            reconciler: OtReconciler::new(),
         }
     }
 
-    pub async fn broadcast(&self, exclude: Option<Uuid>, msg: &str) {
+    pub async fn broadcast(&self, document_id: &str, exclude: Option<Uuid>, msg: &str) {
+        let peer_ids = {
+            let rooms = self.rooms.read().await;
+            rooms
+                .get(document_id)
+                .map(|room| room.presence.get_all().into_iter().map(|entry| entry.peer_id).collect::<Vec<_>>())
+                .unwrap_or_default()
+        };
         let peers = self.peers.read().await;
-        for (id, tx) in peers.iter() {
-            if Some(*id) != exclude {
-                let _ = tx.send(msg.to_string()).await;
+        for id in peer_ids {
+            if Some(id) != exclude {
+                if let Some(tx) = peers.get(&id) {
+                    let _ = tx.send(msg.to_string()).await;
+                }
             }
         }
     }
 
-    async fn broadcast_presence(&self) {
-        let snapshots = self.presence.read().await.get_all_snapshots();
+    async fn broadcast_presence(&self, document_id: &str) {
+        let snapshots = {
+            let rooms = self.rooms.read().await;
+            rooms
+                .get(document_id)
+                .map(|room| room.presence.get_all_snapshots())
+                .unwrap_or_default()
+        };
         let msg = serde_json::to_string(&ServerMessage::Presence { peers: snapshots }).unwrap();
-        self.broadcast(None, &msg).await;
+        self.broadcast(document_id, None, &msg).await;
     }
 }
 
@@ -61,18 +89,35 @@ pub fn app(state: Arc<AppState>, static_dir: Option<PathBuf>) -> Router {
     // Spawn heartbeat cleanup task
     let heartbeat_state = state.clone();
     tokio::spawn(async move {
-        let interval = heartbeat_state.presence.read().await.heartbeat_timeout_ms();
+        let interval = {
+            let rooms = heartbeat_state.rooms.read().await;
+            rooms
+                .values()
+                .next()
+                .map(|room| room.presence.heartbeat_timeout_ms())
+                .unwrap_or(5000)
+        };
         let mut timer = tokio::time::interval(tokio::time::Duration::from_millis(interval / 2));
         timer.tick().await;
         loop {
             timer.tick().await;
             let now = timestamp_ms();
-            let removed = {
-                let mut presence = heartbeat_state.presence.write().await;
-                presence.cleanup_stale(now)
+            let room_ids: Vec<String> = {
+                let rooms = heartbeat_state.rooms.read().await;
+                rooms.keys().cloned().collect()
             };
-            if !removed.is_empty() {
-                heartbeat_state.broadcast_presence().await;
+            for document_id in room_ids {
+                let removed = {
+                    let mut rooms = heartbeat_state.rooms.write().await;
+                    if let Some(room) = rooms.get_mut(&document_id) {
+                        room.presence.cleanup_stale(now)
+                    } else {
+                        Vec::new()
+                    }
+                };
+                if !removed.is_empty() {
+                    heartbeat_state.broadcast_presence(&document_id).await;
+                }
             }
         }
     });
@@ -106,33 +151,34 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
     let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(64);
     state.peers.write().await.insert(peer_id, tx);
+    let mut current_document = "default".to_string();
+    {
+        let mut rooms = state.rooms.write().await;
+        let room = rooms.entry(current_document.clone()).or_insert_with(|| DocumentRoom {
+            document: Document::new(),
+            presence: PresenceMap::default(),
+            sync_states: HashMap::new(),
+            op_seq: 0,
+        });
+        room.sync_states.insert(peer_id, SyncState::new());
+        room.presence.update(
+            peer_id,
+            format!("User-{}", &peer_id.to_string()[..8]),
+            "#3b82f6".to_string(),
+            None,
+            timestamp_ms(),
+        );
+        let welcome = serde_json::to_string(&ServerMessage::Sync {
+            response: helios_sync::SyncResponse {
+                ops: vec![],
+                current_seq: room.op_seq,
+            },
+        })
+        .unwrap();
+        let _ = ws_sender.send(Message::Text(welcome)).await;
+    }
 
-    state
-        .sync_states
-        .write()
-        .await
-        .insert(peer_id, SyncState::new());
-
-    state.presence.write().await.update(
-        peer_id,
-        format!("User-{}", &peer_id.to_string()[..8]),
-        "#3b82f6".to_string(),
-        None,
-        timestamp_ms(),
-    );
-
-    let current_seq = *state.op_seq.read().await;
-    let welcome = serde_json::to_string(&ServerMessage::Sync {
-        response: helios_sync::SyncResponse {
-            ops: vec![],
-            current_seq,
-        },
-    })
-    .unwrap();
-    let _ = ws_sender.send(Message::Text(welcome)).await;
-
-    // Broadcast updated presence (new user joined)
-    state.broadcast_presence().await;
+    state.broadcast_presence(&current_document).await;
 
     tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
@@ -156,18 +202,66 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         };
 
         match client_msg {
-            ClientMessage::Join { document_id: _ } => {}
+            ClientMessage::Join { document_id } => {
+                if document_id != current_document {
+                    let now = timestamp_ms();
+                    {
+                        let mut rooms = state.rooms.write().await;
+                        if let Some(room) = rooms.get_mut(&current_document) {
+                            room.presence.remove(&peer_id);
+                            room.sync_states.remove(&peer_id);
+                        }
+                        let room = rooms.entry(document_id.clone()).or_insert_with(|| DocumentRoom {
+                            document: Document::new(),
+                            presence: PresenceMap::default(),
+                            sync_states: HashMap::new(),
+                            op_seq: 0,
+                        });
+                        room.sync_states.insert(peer_id, SyncState::new());
+                        room.presence.update(
+                            peer_id,
+                            format!("User-{}", &peer_id.to_string()[..8]),
+                            "#3b82f6".to_string(),
+                            None,
+                            now,
+                        );
+                        let current_seq = room.op_seq;
+                        let welcome = serde_json::to_string(&ServerMessage::Sync {
+                            response: helios_sync::SyncResponse {
+                                ops: room
+                                    .document
+                                    .op_log
+                                    .ops()
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(i, op)| (i as u64, op.clone()))
+                                    .collect(),
+                                current_seq,
+                            },
+                        })
+                        .unwrap();
+                        let _ = state.peers.read().await.get(&peer_id).map(|tx| tx.try_send(welcome));
+                    }
+                    current_document = document_id;
+                    state.broadcast_presence(&current_document).await;
+                }
+            }
 
             ClientMessage::Op { op } => {
-                let mut doc = state.document.write().await;
-                let mut seq = state.op_seq.write().await;
-                *seq += 1;
-                let current_seq = *seq;
-
-                let last_op = doc.op_log.ops().last().cloned();
-                let corrected = state.reconciler.reconcile(&mut doc, op, last_op.as_ref());
-                drop(doc);
-                drop(seq);
+                let (corrected, current_seq) = {
+                    let mut rooms = state.rooms.write().await;
+                    let room = rooms.entry(current_document.clone()).or_insert_with(|| DocumentRoom {
+                        document: Document::new(),
+                        presence: PresenceMap::default(),
+                        sync_states: HashMap::new(),
+                        op_seq: 0,
+                    });
+                    room.op_seq += 1;
+                    let current_seq = room.op_seq;
+                    let last_op = room.document.op_log.ops().last().cloned();
+                    let corrected = state.reconciler.reconcile(&mut room.document, op, last_op.as_ref());
+                    (corrected, current_seq)
+                };
 
                 for corrected_op in corrected {
                     // Save to PostgreSQL in background to avoid blocking the WS loop
@@ -185,21 +279,28 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                         seq: current_seq,
                     })
                     .unwrap();
-                    state.broadcast(None, &server_msg).await;
+                    state.broadcast(&current_document, None, &server_msg).await;
                 }
             }
 
             ClientMessage::Sync { request } => {
-                let doc = state.document.read().await;
-                let current_seq = *state.op_seq.read().await;
-                let ops: Vec<(u64, Op)> = doc
-                    .op_log
-                    .ops()
-                    .iter()
-                    .enumerate()
-                    .skip(request.last_seen_seq as usize)
-                    .map(|(i, op)| (i as u64, op.clone()))
-                    .collect();
+                let rooms = state.rooms.read().await;
+                let room = rooms.get(&current_document);
+                let (ops, current_seq) = if let Some(room) = room {
+                    (
+                        room.document
+                            .op_log
+                            .ops()
+                            .iter()
+                            .enumerate()
+                            .skip(request.last_seen_seq as usize)
+                            .map(|(i, op)| (i as u64, op.clone()))
+                            .collect(),
+                        room.op_seq,
+                    )
+                } else {
+                    (Vec::new(), 0)
+                };
 
                 let response = serde_json::to_string(&ServerMessage::Sync {
                     response: helios_sync::SyncResponse { ops, current_seq },
@@ -222,26 +323,32 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             } => {
                 let now = timestamp_ms();
                 {
-                    let mut presence = state.presence.write().await;
-                    presence.update(
-                        peer_id,
-                        format!("User-{}", &peer_id.to_string()[..8]),
-                        "#3b82f6".to_string(),
-                        cursor,
-                        now,
-                    );
-                    presence.update_selection(&peer_id, selection_start, selection_end, now);
-                    presence.update_viewport(&peer_id, viewport_top, viewport_bottom, now);
+                    let mut rooms = state.rooms.write().await;
+                    if let Some(room) = rooms.get_mut(&current_document) {
+                        room.presence.update(
+                            peer_id,
+                            format!("User-{}", &peer_id.to_string()[..8]),
+                            "#3b82f6".to_string(),
+                            cursor,
+                            now,
+                        );
+                        room.presence.update_selection(&peer_id, selection_start, selection_end, now);
+                        room.presence.update_viewport(&peer_id, viewport_top, viewport_bottom, now);
+                    }
                 }
 
-                state.broadcast_presence().await;
+                state.broadcast_presence(&current_document).await;
             }
         }
     }
 
     state.peers.write().await.remove(&peer_id);
-    state.presence.write().await.remove(&peer_id);
-    state.sync_states.write().await.remove(&peer_id);
-
-    state.broadcast_presence().await;
+    {
+        let mut rooms = state.rooms.write().await;
+        if let Some(room) = rooms.get_mut(&current_document) {
+            room.presence.remove(&peer_id);
+            room.sync_states.remove(&peer_id);
+        }
+    }
+    state.broadcast_presence(&current_document).await;
 }
