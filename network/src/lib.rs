@@ -202,9 +202,11 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         };
 
         match client_msg {
-            ClientMessage::Join { document_id } => {
+            ClientMessage::Join { document_id, name, color } => {
+                let now = timestamp_ms();
+                
                 if document_id != current_document {
-                    let now = timestamp_ms();
+                    // Switch rooms
                     {
                         let mut rooms = state.rooms.write().await;
                         if let Some(room) = rooms.get_mut(&current_document) {
@@ -218,13 +220,8 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             op_seq: 0,
                         });
                         room.sync_states.insert(peer_id, SyncState::new());
-                        room.presence.update(
-                            peer_id,
-                            format!("User-{}", &peer_id.to_string()[..8]),
-                            "#3b82f6".to_string(),
-                            None,
-                            now,
-                        );
+                        room.presence.update(peer_id, name.clone(), color.clone(), None, now);
+                        
                         let current_seq = room.op_seq;
                         let welcome = serde_json::to_string(&ServerMessage::Sync {
                             response: helios_sync::SyncResponse {
@@ -242,9 +239,18 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                         .unwrap();
                         let _ = state.peers.read().await.get(&peer_id).map(|tx| tx.try_send(welcome));
                     }
+                    
                     current_document = document_id;
-                    state.broadcast_presence(&current_document).await;
+                } else {
+                    // Update name/color in current room
+                    let mut rooms = state.rooms.write().await;
+                    if let Some(room) = rooms.get_mut(&current_document) {
+                        let cursor = room.presence.get(&peer_id).and_then(|p| p.cursor.clone());
+                        room.presence.update(peer_id, name, color, cursor, now);
+                    }
                 }
+                
+                state.broadcast_presence(&current_document).await;
             }
 
             ClientMessage::Op { op } => {
@@ -325,15 +331,13 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 {
                     let mut rooms = state.rooms.write().await;
                     if let Some(room) = rooms.get_mut(&current_document) {
-                        room.presence.update(
-                            peer_id,
-                            format!("User-{}", &peer_id.to_string()[..8]),
-                            "#3b82f6".to_string(),
-                            cursor,
-                            now,
-                        );
-                        room.presence.update_selection(&peer_id, selection_start, selection_end, now);
-                        room.presence.update_viewport(&peer_id, viewport_top, viewport_bottom, now);
+                        if let Some(entry) = room.presence.get(&peer_id) {
+                            let name = entry.name.clone();
+                            let color = entry.color.clone();
+                            room.presence.update(peer_id, name, color, cursor, now);
+                            room.presence.update_selection(&peer_id, selection_start, selection_end, now);
+                            room.presence.update_viewport(&peer_id, viewport_top, viewport_bottom, now);
+                        }
                     }
                 }
 
