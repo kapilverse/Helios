@@ -16,7 +16,7 @@ async fn start_server() -> (String, oneshot::Sender<()>) {
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     tokio::spawn(async move {
-        let server = axum::serve(listener, app(state));
+        let server = axum::serve(listener, app(state, None));
         tokio::select! {
             _ = server => {}
             _ = shutdown_rx => {}

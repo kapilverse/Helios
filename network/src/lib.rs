@@ -12,8 +12,9 @@ use helios_crdt::{Document, Op};
 use helios_ot_reconciler::OtReconciler;
 use helios_presence::PresenceMap;
 use helios_sync::{ClientMessage, ServerMessage, SyncState};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
+use tower_http::services::ServeDir;
 use uuid::Uuid;
 
 pub struct AppState {
@@ -59,7 +60,7 @@ impl Default for AppState {
     }
 }
 
-pub fn app(state: Arc<AppState>) -> Router {
+pub fn app(state: Arc<AppState>, static_dir: Option<PathBuf>) -> Router {
     // Spawn heartbeat cleanup task
     let heartbeat_state = state.clone();
     tokio::spawn(async move {
@@ -79,10 +80,16 @@ pub fn app(state: Arc<AppState>) -> Router {
         }
     });
 
-    Router::new()
+    let mut router = Router::new()
         .route("/ws", get(ws_handler))
         .route("/healthz", get(|| async { "ok" }))
-        .with_state(state)
+        .with_state(state);
+
+    if let Some(dir) = static_dir {
+        router = router.fallback_service(ServeDir::new(dir).append_index_html_on_directories(true));
+    }
+
+    router
 }
 
 fn timestamp_ms() -> u64 {
