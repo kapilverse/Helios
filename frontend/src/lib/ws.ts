@@ -30,6 +30,8 @@ export interface ServerMessage {
       op_id: OpId | null;
       name: string;
       color: string;
+      selection_start?: OpId | null;
+      selection_end?: OpId | null;
     }[];
   };
   Error?: { message: string };
@@ -38,6 +40,12 @@ export interface ServerMessage {
 export interface ClientMessage {
   Join?: { document_id: string };
   Op?: { op: Op };
+  Sync?: {
+    request: {
+      document_id: string;
+      last_seen_seq: number;
+    };
+  };
   Presence?: {
     cursor: OpId | null;
     selection_start: OpId | null;
@@ -56,9 +64,12 @@ export class HeliosClient {
   private peerId: string;
   private clock: number = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private documentId: string;
+  private syncSince: number = 0;
 
-  constructor(url: string) {
+  constructor(url: string, documentId: string) {
     this.url = url;
+    this.documentId = documentId;
     this.peerId = crypto.randomUUID();
   }
 
@@ -67,7 +78,8 @@ export class HeliosClient {
 
     this.ws.onopen = () => {
       console.log('[Helios] Connected');
-      this.send({ Join: { document_id: 'default' } });
+      this.send({ Join: { document_id: this.documentId } });
+      this.send({ Sync: { request: { document_id: this.documentId, last_seen_seq: this.syncSince } } });
     };
 
     this.ws.onmessage = (event) => {
@@ -83,6 +95,10 @@ export class HeliosClient {
     this.ws.onerror = (err) => {
       console.error('[Helios] Error:', err);
     };
+  }
+
+  setSyncSince(seq: number) {
+    this.syncSince = seq;
   }
 
   disconnect() {
@@ -116,12 +132,12 @@ export class HeliosClient {
     this.send({ Op: { op } });
   }
 
-  sendPresence(cursor: OpId | null) {
+  sendPresence(cursor: OpId | null, selectionStart: OpId | null = null, selectionEnd: OpId | null = null) {
     this.send({
       Presence: {
         cursor,
-        selection_start: null,
-        selection_end: null,
+        selection_start: selectionStart,
+        selection_end: selectionEnd,
         viewport_top: null,
         viewport_bottom: null,
       },
