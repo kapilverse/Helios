@@ -2,8 +2,8 @@ import React, { useRef, useEffect, useCallback } from 'react';
 
 interface EditorProps {
   content: string;
-  cursors: { name: string; color: string }[];
-  onTextChange: (nextContent: string, selectionStart: number | null) => void;
+  cursors: { name: string; color: string; selectionStart?: { peer: string; clock: number } | null; selectionEnd?: { peer: string; clock: number } | null }[];
+  onTextChange: (nextContent: string, selectionStart: number | null, selectionEnd: number | null) => void;
 }
 
 export function Editor({ content, cursors, onTextChange }: EditorProps) {
@@ -26,7 +26,7 @@ export function Editor({ content, cursors, onTextChange }: EditorProps) {
   }, [content]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    onTextChange(e.target.value, e.target.selectionStart);
+    onTextChange(e.target.value, e.target.selectionStart, e.target.selectionEnd);
   }, [onTextChange]);
 
   return (
@@ -46,7 +46,12 @@ export function Editor({ content, cursors, onTextChange }: EditorProps) {
           {cursors.map((c, i) => (
             <span key={i} className="cursor-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-glass)', borderRadius: 20, fontSize: 12, fontWeight: 500 }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, boxShadow: `0 0 8px ${c.color}` }} />
-              {c.name}
+              <span>{c.name}</span>
+              {(c.selectionStart != null && c.selectionEnd != null) ? (
+                <span style={{ color: 'var(--text-muted)' }}>
+                  {'cursor'}
+                </span>
+              ) : null}
             </span>
           ))}
         </div>
