@@ -38,7 +38,7 @@ export interface ServerMessage {
 }
 
 export interface ClientMessage {
-  Join?: { document_id: string };
+  Join?: { document_id: string; name: string; color: string };
   Op?: { op: Op };
   Sync?: {
     request: {
@@ -61,15 +61,19 @@ export class HeliosClient {
   private ws: WebSocket | null = null;
   private handlers: MessageHandler[] = [];
   private url: string;
+  private documentId: string;
+  private syncSince: number = 0;
   private peerId: string;
   private clock: number = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private documentId: string;
-  private syncSince: number = 0;
+  private name: string;
+  private color: string;
 
-  constructor(url: string, documentId: string) {
+  constructor(url: string, documentId: string, name: string, color: string) {
     this.url = url;
     this.documentId = documentId;
+    this.name = name;
+    this.color = color;
     this.peerId = crypto.randomUUID();
   }
 
@@ -78,7 +82,7 @@ export class HeliosClient {
 
     this.ws.onopen = () => {
       console.log('[Helios] Connected');
-      this.send({ Join: { document_id: this.documentId } });
+      this.send({ Join: { document_id: this.documentId, name: this.name, color: this.color } });
       this.send({ Sync: { request: { document_id: this.documentId, last_seen_seq: this.syncSince } } });
     };
 
