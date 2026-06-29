@@ -9,96 +9,86 @@ interface EditorProps {
 
 export function Editor({ content, cursors, onInsert, onDelete }: EditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
-  const cursorPosRef = useRef(0);
-  const composingRef = useRef(false);
+  const lastContentRef = useRef('');
+  const ignoreNextInput = useRef(false);
 
   useEffect(() => {
     if (!editorRef.current) return;
     const el = editorRef.current;
 
-    if (el.textContent !== content) {
-      const savedPos = cursorPosRef.current;
-      el.textContent = content;
-      // Restore cursor position
-      if (el.firstChild) {
-        const range = document.createRange();
-        const sel = window.getSelection();
-        const pos = Math.min(savedPos, el.textContent.length);
-        range.setStart(el.firstChild, pos);
-        range.collapse(true);
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-        cursorPosRef.current = pos;
-      }
-    }
-  }, [content]);
-
-  const updateCursorPos = useCallback(() => {
+    // Save cursor position before updating content
     const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
+    let savedOffset = 0;
+    if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
       const range = sel.getRangeAt(0);
       const preRange = document.createRange();
-      preRange.selectNodeContents(editorRef.current!);
+      preRange.selectNodeContents(el);
       preRange.setEnd(range.startContainer, range.startOffset);
-      cursorPosRef.current = preRange.toString().length;
+      savedOffset = preRange.toString().length;
+    } else {
+      savedOffset = el.textContent?.length ?? 0;
     }
+
+    // Only update if content actually changed
+    if (el.textContent !== content) {
+      ignoreNextInput.current = true;
+      el.textContent = content;
+    }
+
+    // Restore cursor
+    if (el.firstChild && content.length > 0) {
+      const range = document.createRange();
+      const textNode = el.firstChild;
+      const pos = Math.min(savedOffset, textNode.textContent?.length ?? 0);
+      range.setStart(textNode, pos);
+      range.collapse(true);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+
+    lastContentRef.current = content;
+  }, [content]);
+
+  const getCursorPos = useCallback((): number => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return editorRef.current?.textContent?.length ?? 0;
+    const range = sel.getRangeAt(0);
+    const preRange = document.createRange();
+    preRange.selectNodeContents(editorRef.current!);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    return preRange.toString().length;
   }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (composingRef.current) return;
-
-    updateCursorPos();
-    const pos = cursorPosRef.current;
-
     if (e.key === 'Backspace') {
       e.preventDefault();
-      if (pos > 0) {
-        onDelete(pos - 1);
-      }
+      const pos = getCursorPos();
+      if (pos > 0) onDelete(pos - 1);
       return;
     }
-
     if (e.key === 'Delete') {
       e.preventDefault();
-      if (pos < content.length) {
-        onDelete(pos);
-      }
+      const pos = getCursorPos();
+      onDelete(pos);
       return;
     }
-
     if (e.key === 'Enter') {
       e.preventDefault();
-      onInsert(pos, '\n');
+      onInsert(getCursorPos(), '\n');
       return;
     }
-
     if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
-      onInsert(pos, e.key);
+      onInsert(getCursorPos(), e.key);
     }
-  }, [content, onInsert, onDelete, updateCursorPos]);
-
-  const handleInput = useCallback(() => {
-    updateCursorPos();
-  }, [updateCursorPos]);
+  }, [getCursorPos, onInsert, onDelete]);
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '8px 16px', borderBottom: '1px solid #334155', display: 'flex', gap: 8, alignItems: 'center' }}>
         <span style={{ color: '#94a3b8', fontSize: 14 }}>Cursors:</span>
         {cursors.map((c, i) => (
-          <span
-            key={i}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '2px 8px',
-              background: '#1e293b',
-              borderRadius: 4,
-              fontSize: 12,
-            }}
-          >
+          <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', background: '#1e293b', borderRadius: 4, fontSize: 12 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color }} />
             {c.name}
           </span>
@@ -109,9 +99,6 @@ export function Editor({ content, cursors, onInsert, onDelete }: EditorProps) {
         contentEditable
         suppressContentEditableWarning
         onKeyDown={handleKeyDown}
-        onInput={handleInput}
-        onClick={updateCursorPos}
-        onKeyUp={updateCursorPos}
         style={{
           flex: 1,
           padding: '16px',
