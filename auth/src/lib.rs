@@ -77,7 +77,13 @@ impl AuthChecker {
         }
     }
 
-    pub fn create_token(&self, user_id: &Uuid, org_id: &str, role: Role, exp: u64) -> Result<String, AuthError> {
+    pub fn create_token(
+        &self,
+        user_id: &Uuid,
+        org_id: &str,
+        role: Role,
+        exp: u64,
+    ) -> Result<String, AuthError> {
         let claims = Claims {
             sub: user_id.to_string(),
             org_id: org_id.to_string(),
@@ -167,7 +173,12 @@ impl AuthChecker {
             })
     }
 
-    pub fn check_token_permission(&self, token: &str, org_id: &str, require_write: bool) -> Result<Claims, AuthError> {
+    pub fn check_token_permission(
+        &self,
+        token: &str,
+        org_id: &str,
+        require_write: bool,
+    ) -> Result<Claims, AuthError> {
         let claims = self.verify_token(token)?;
 
         if claims.org_id != org_id {
@@ -221,7 +232,9 @@ mod tests {
     fn test_jwt_roundtrip() {
         let c = checker();
         let user_id = Uuid::new_v4();
-        let token = c.create_token(&user_id, "org1", Role::Editor, u64::MAX).unwrap();
+        let token = c
+            .create_token(&user_id, "org1", Role::Editor, u64::MAX)
+            .unwrap();
         let claims = c.verify_token(&token).unwrap();
 
         assert_eq!(claims.sub, user_id.to_string());
@@ -235,7 +248,9 @@ mod tests {
         let c2 = AuthChecker::new(b"secret2");
         let user_id = Uuid::new_v4();
 
-        let token = c1.create_token(&user_id, "org1", Role::Editor, u64::MAX).unwrap();
+        let token = c1
+            .create_token(&user_id, "org1", Role::Editor, u64::MAX)
+            .unwrap();
         assert!(c2.verify_token(&token).is_err());
     }
 
@@ -282,14 +297,26 @@ mod tests {
         let c = checker();
         let user_id = Uuid::new_v4();
 
-        let viewer_token = c.create_token(&user_id, "org1", Role::Viewer, u64::MAX).unwrap();
-        let editor_token = c.create_token(&user_id, "org1", Role::Editor, u64::MAX).unwrap();
+        let viewer_token = c
+            .create_token(&user_id, "org1", Role::Viewer, u64::MAX)
+            .unwrap();
+        let editor_token = c
+            .create_token(&user_id, "org1", Role::Editor, u64::MAX)
+            .unwrap();
 
-        assert!(c.check_token_permission(&viewer_token, "org1", false).is_ok());
-        assert!(c.check_token_permission(&viewer_token, "org1", true).is_err());
-        assert!(c.check_token_permission(&editor_token, "org1", true).is_ok());
+        assert!(c
+            .check_token_permission(&viewer_token, "org1", false)
+            .is_ok());
+        assert!(c
+            .check_token_permission(&viewer_token, "org1", true)
+            .is_err());
+        assert!(c
+            .check_token_permission(&editor_token, "org1", true)
+            .is_ok());
 
-        assert!(c.check_token_permission(&viewer_token, "org2", false).is_err());
+        assert!(c
+            .check_token_permission(&viewer_token, "org2", false)
+            .is_err());
     }
 
     #[test]
