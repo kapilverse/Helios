@@ -6,3 +6,11 @@ edition.workspace = true
 [dependencies]
 helios-crdt = { path = "../crdt" }
 helios-ot-reconciler = { path = "../ot-reconciler" }
+helios-storage = { path = "../storage" }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "crdt_bench"
+harness = false
