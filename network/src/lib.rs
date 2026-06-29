@@ -172,10 +172,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 for corrected_op in corrected {
                     // Save to PostgreSQL
                     if let Ok(op_json) = serde_json::to_value(&corrected_op) {
-                        let _ = sqlx::query!(
+                        let _ = sqlx::query(
                             "INSERT INTO operations (op_data) VALUES ($1)",
-                            op_json
                         )
+                        .bind(op_json)
                         .execute(&state.db)
                         .await;
                     }
