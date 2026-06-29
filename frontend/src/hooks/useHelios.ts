@@ -138,5 +138,52 @@ export function useHelios(url: string) {
     clientRef.current?.sendPresence(cursor);
   }, []);
 
-  return { connected, content, cursors, insertChar, deleteChar, sendPresence };
+  const applyLocalText = useCallback((nextContent: string, selectionStart: number | null) => {
+    const current = contentRef.current;
+    if (nextContent === current) return;
+
+    let prefix = 0;
+    while (prefix < current.length && prefix < nextContent.length && current[prefix] === nextContent[prefix]) {
+      prefix += 1;
+    }
+
+    let suffix = 0;
+    while (
+      suffix < current.length - prefix &&
+      suffix < nextContent.length - prefix &&
+      current[current.length - 1 - suffix] === nextContent[nextContent.length - 1 - suffix]
+    ) {
+      suffix += 1;
+    }
+
+    const removed = current.slice(prefix, current.length - suffix);
+    const added = nextContent.slice(prefix, nextContent.length - suffix);
+
+    if (removed.length > 0) {
+      for (let i = 0; i < removed.length; i += 1) {
+        deleteChar(prefix);
+      }
+    }
+
+    if (added.length > 0) {
+      for (let i = 0; i < added.length; i += 1) {
+        insertChar(prefix + i, added[i]);
+      }
+    }
+
+    contentRef.current = nextContent;
+    setContent(nextContent);
+
+    if (selectionStart != null) {
+      // Keep the browser caret where the user expects after React catches up.
+      queueMicrotask(() => {
+        const el = document.querySelector('textarea');
+        if (el instanceof HTMLTextAreaElement) {
+          el.setSelectionRange(selectionStart, selectionStart);
+        }
+      });
+    }
+  }, [deleteChar, insertChar]);
+
+  return { connected, content, cursors, applyLocalText, sendPresence };
 }
