@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS operations (
+    seq BIGSERIAL PRIMARY KEY,
+    op_data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
