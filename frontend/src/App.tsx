@@ -11,7 +11,7 @@ export default function App() {
       ? `wss://${window.location.host}/ws`
       : `ws://${window.location.hostname}:3000/ws`;
 
-  const { connected, content, cursors, insertChar, deleteChar } = useHelios(wsUrl);
+  const { connected, content, cursors, applyLocalText } = useHelios(wsUrl);
 
   if (!userName) {
     return <Login onLogin={setUserName} />;
@@ -90,8 +90,7 @@ export default function App() {
           <Editor
             content={content}
             cursors={cursors}
-            onInsert={insertChar}
-            onDelete={deleteChar}
+            onTextChange={applyLocalText}
           />
         </div>
       </div>
