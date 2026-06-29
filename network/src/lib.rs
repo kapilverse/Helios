@@ -18,6 +18,7 @@ use tower_http::services::ServeDir;
 use uuid::Uuid;
 
 pub struct AppState {
+    pub db: sqlx::PgPool,
     pub document: RwLock<Document>,
     pub reconciler: OtReconciler,
     pub presence: RwLock<PresenceMap>,
@@ -27,13 +28,15 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new() -> Self {
+    pub fn new(db: sqlx::PgPool, initial_document: Document) -> Self {
+        let op_seq_val = initial_document.op_log.len() as u64;
         Self {
-            document: RwLock::new(Document::new()),
+            db,
+            document: RwLock::new(initial_document),
             reconciler: OtReconciler::new(),
             presence: RwLock::new(PresenceMap::default()),
             sync_states: RwLock::new(HashMap::new()),
-            op_seq: RwLock::new(0),
+            op_seq: RwLock::new(op_seq_val),
             peers: RwLock::new(HashMap::new()),
         }
     }
@@ -51,12 +54,6 @@ impl AppState {
         let snapshots = self.presence.read().await.get_all_snapshots();
         let msg = serde_json::to_string(&ServerMessage::Presence { peers: snapshots }).unwrap();
         self.broadcast(None, &msg).await;
-    }
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -173,6 +170,16 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 drop(seq);
 
                 for corrected_op in corrected {
+                    // Save to PostgreSQL
+                    if let Ok(op_json) = serde_json::to_value(&corrected_op) {
+                        let _ = sqlx::query!(
+                            "INSERT INTO operations (op_data) VALUES ($1)",
+                            op_json
+                        )
+                        .execute(&state.db)
+                        .await;
+                    }
+
                     let server_msg = serde_json::to_string(&ServerMessage::Op {
                         op: corrected_op,
                         seq: current_seq,
