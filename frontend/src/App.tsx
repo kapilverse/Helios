@@ -18,52 +18,83 @@ export default function App() {
   }
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#0f172a' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div
+        className="glass-panel"
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '12px 20px',
-          borderBottom: '1px solid #1e293b',
-          background: '#0f172a',
+          padding: '16px 24px',
+          borderBottom: '1px solid var(--border-glass)',
+          borderTop: 'none',
+          borderLeft: 'none',
+          borderRight: 'none',
+          borderRadius: 0,
+          zIndex: 10,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 700, color: '#38bdf8' }}>HELIOS</h1>
-          <span
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{
+            background: 'linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontWeight: 800,
+            fontSize: 20,
+            letterSpacing: '-0.02em',
+          }}>
+            HELIOS
+          </div>
+          <div
             style={{
-              fontSize: 12,
-              padding: '2px 8px',
-              borderRadius: 4,
-              background: connected ? '#064e3b' : '#7f1d1d',
-              color: connected ? '#6ee7b7' : '#fca5a5',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              borderRadius: 20,
+              background: connected ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              border: `1px solid ${connected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
             }}
           >
-            {connected ? 'Connected' : 'Connecting...'}
-          </span>
+            <div style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: connected ? '#10b981' : '#ef4444',
+              boxShadow: connected ? '0 0 8px #10b981' : '0 0 8px #ef4444',
+            }} className="pulse-dot" />
+            <span style={{ fontSize: 12, fontWeight: 500, color: connected ? '#34d399' : '#f87171' }}>
+              {connected ? 'Live' : 'Connecting'}
+            </span>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(15, 23, 42, 0.5)', padding: '6px 14px', borderRadius: 20, border: '1px solid var(--border-glass)' }}>
           <span
             style={{
               width: 8,
               height: 8,
               borderRadius: '50%',
-              background: '#3b82f6',
+              background: '#8b5cf6',
+              boxShadow: '0 0 10px #8b5cf6'
             }}
           />
-          <span style={{ fontSize: 13, color: '#94a3b8' }}>{userName}</span>
+          <span style={{ fontSize: 13, fontWeight: 500, color: '#e2e8f0' }}>{userName}</span>
         </div>
       </div>
 
       {/* Editor */}
-      <Editor
-        content={content}
-        cursors={cursors}
-        onInsert={insertChar}
-        onDelete={deleteChar}
-      />
+      <div style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-panel animate-fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRadius: 16, overflow: 'hidden' }}>
+          <Editor
+            content={content}
+            cursors={cursors}
+            onInsert={insertChar}
+            onDelete={deleteChar}
+          />
+        </div>
+      </div>
     </div>
   );
 }
