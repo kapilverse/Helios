@@ -45,7 +45,9 @@ thread_local! {
 fn with_engine<R>(f: impl FnOnce(&mut GhostEngine) -> R) -> R {
     ENGINE.with(|cell| {
         let mut borrow = cell.borrow_mut();
-        let engine = borrow.as_mut().expect("GhostEngine not initialized — call init_engine() first");
+        let engine = borrow
+            .as_mut()
+            .expect("GhostEngine not initialized — call init_engine() first");
         f(engine)
     })
 }
@@ -141,7 +143,9 @@ pub fn apply_server_op(op_json: &str) -> JsValue {
 
     with_engine(|e| {
         let last_op = e.confirmed_doc.op_log.ops().last().cloned();
-        let corrected = e.reconciler.reconcile(&mut e.confirmed_doc, op, last_op.as_ref());
+        let corrected = e
+            .reconciler
+            .reconcile(&mut e.confirmed_doc, op, last_op.as_ref());
 
         for corrected_op in &corrected {
             e.optimistic_doc.apply(corrected_op.clone());
