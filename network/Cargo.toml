@@ -18,3 +18,4 @@ tracing = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
 futures-util = "0.3"
+sqlx = { version = "0.8", features = ["postgres", "json", "uuid"] }
