@@ -37,22 +37,26 @@ export function useHelios(url: string) {
 
       if (msg.Op) {
         const op = msg.Op.op;
+        const myPeerId = clientRef.current?.peerIdStr;
+
         if ('Insert' in op) {
-          // Find position: after the character with matching OpId
-          const afterId = op.Insert.after;
-          let pos = contentRef.current.length;
-          if (afterId) {
-            const idx = charIdsRef.current.findIndex(
-              (id) => id.peer === afterId.peer && id.clock === afterId.clock
-            );
-            if (idx !== -1) pos = idx + 1;
+          if (op.Insert.id.peer !== myPeerId) {
+            // Find position: after the character with matching OpId
+            const afterId = op.Insert.after;
+            let pos = contentRef.current.length;
+            if (afterId) {
+              const idx = charIdsRef.current.findIndex(
+                (id) => id.peer === afterId.peer && id.clock === afterId.clock
+              );
+              if (idx !== -1) pos = idx + 1;
+            }
+            contentRef.current =
+              contentRef.current.slice(0, pos) +
+              op.Insert.content +
+              contentRef.current.slice(pos);
+            charIdsRef.current.splice(pos, 0, op.Insert.id);
+            setContent(contentRef.current);
           }
-          contentRef.current =
-            contentRef.current.slice(0, pos) +
-            op.Insert.content +
-            contentRef.current.slice(pos);
-          charIdsRef.current.splice(pos, 0, op.Insert.id);
-          setContent(contentRef.current);
         } else if ('Delete' in op) {
           const idx = charIdsRef.current.findIndex(
             (id) => id.peer === op.Delete.target.peer && id.clock === op.Delete.target.clock
