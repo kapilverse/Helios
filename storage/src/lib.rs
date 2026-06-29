@@ -135,8 +135,9 @@ impl DocumentStore {
         self.snapshots.len()
     }
 
+    #[allow(clippy::manual_is_multiple_of)]
     fn should_snapshot(&self) -> bool {
-        self.op_store.len().is_multiple_of(self.snapshot_interval)
+        self.snapshot_interval > 0 && self.op_store.len() % self.snapshot_interval == 0
     }
 }
 
