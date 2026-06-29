@@ -8,7 +8,7 @@ use axum::{
     Router,
 };
 use futures_util::{SinkExt, StreamExt};
-use helios_crdt::{Document, Op};
+use helios_crdt::Document;
 use helios_ot_reconciler::OtReconciler;
 use helios_presence::PresenceMap;
 use helios_sync::{ClientMessage, ServerMessage, SyncState};
@@ -245,7 +245,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                     // Update name/color in current room
                     let mut rooms = state.rooms.write().await;
                     if let Some(room) = rooms.get_mut(&current_document) {
-                        let cursor = room.presence.get(&peer_id).and_then(|p| p.cursor.clone());
+                        let cursor = room.presence.get(&peer_id).and_then(|p| p.cursor);
                         room.presence.update(peer_id, name, color, cursor, now);
                     }
                 }
