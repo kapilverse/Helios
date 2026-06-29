@@ -8,7 +8,7 @@ use tokio::sync::oneshot;
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 async fn start_server() -> (String, oneshot::Sender<()>) {
-    let state = Arc::new(AppState::new());
+    let state = Arc::new(AppState::new(None, helios_crdt::Document::new()));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let url = format!("ws://{}/ws", addr);
