@@ -5,14 +5,20 @@ import { useHelios } from './hooks/useHelios';
 
 export default function App() {
   const [userName, setUserName] = useState<string | null>(null);
+  const [userColor, setUserColor] = useState<string>('#3b82f6');
   const [documentId, setDocumentId] = useState<string>('default');
 
   const wsUrl = `${window.location.origin.replace(/^http/, 'ws')}/ws`;
 
-  const { connected, content, cursors, applyLocalText } = useHelios(wsUrl, documentId);
+  const { connected, content, cursors, applyLocalText } = useHelios(wsUrl, documentId, userName || 'Anonymous', userColor);
 
   if (!userName) {
-    return <Login onLogin={(name, docId) => { setUserName(name); setDocumentId(docId); }} />;
+    return <Login onLogin={(name, docId) => { 
+      setUserName(name); 
+      setDocumentId(docId); 
+      const colors = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#4ade80', '#2dd4bf', '#38bdf8', '#818cf8', '#a78bfa', '#e879f9', '#fb7185'];
+      setUserColor(colors[Math.floor(Math.random() * colors.length)]);
+    }} />;
   }
 
   return (
