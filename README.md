@@ -1,114 +1,108 @@
 # HELIOS
 
-Real-time collaborative document editing powered by CRDTs. Two browsers, one document, live cursors, visible conflict resolution.
+A real-time collaborative document editor — like Google Docs, but open-source and built from scratch with Rust CRDTs.
+
+Multiple users can open the same document in their browsers, type simultaneously, and see each other's edits appear in real time with live cursors. No operational transforms, no fighting over positions — every character gets a unique ID, so concurrent edits always converge.
+
+## What Is This?
+
+HELIOS is a full-stack collaborative editing system:
+
+- **Backend**: Rust server handling WebSocket connections, conflict resolution (CRDT + OT reconciler), persistence, and authentication
+- **Frontend**: React app with a real-time text editor, login screen, and multi-cursor display
+- **Protocol**: Custom WebSocket protocol with delta sync — on reconnect, you only get the ops you missed, not the whole document
+
+Two people open the document → both type at the same time → edits merge automatically → no conflicts, no data loss.
+
+## How To Run
+
+### Option 1: Docker (recommended)
+
+```bash
+docker compose up --build
+```
+
+Open **http://localhost:3000** — enter your name and start typing. Open another browser tab to see real-time sync.
+
+### Option 2: Run manually
+
+**Terminal 1 — Start the Rust server:**
+```bash
+cargo run --bin helios-server
+```
+
+**Terminal 2 — Start the React frontend:**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open **http://localhost:5173** — enter your name and start typing. Open another tab to see your edits sync in real time.
+
+### What you'll see
+
+1. **Login screen** — enter your name
+2. **Editor** — a dark-themed text editor with a green "Connected" badge
+3. **Multi-cursor** — other users' names and cursors appear at the top
+4. **Real-time sync** — type in one tab, see it appear in the other instantly
 
 ## Architecture
 
 ```
-┌─────────────┐     WebSocket      ┌──────────────┐
-│   Browser    │ ◄───────────────► │  Axum Server  │
-│  (React +   │    FlatBuffers     │  ┌─────────┐  │
-│   WASM)     │                    │  │ OT Recon │  │
-└─────────────┘                    │  └─────────┘  │
-                                   │  ┌─────────┐  │
-┌─────────────┐     WebSocket      │  │ CRDT    │  │
-│   Browser    │ ◄───────────────► │  │ Engine  │  │
-│  (React +   │                    │  └─────────┘  │
-│   WASM)     │                    └──────────────┘
-└─────────────┘                           │
-                                    ┌─────┴─────┐
-                                    │  Storage   │
-                                    │  (SQLite)  │
-                                    └───────────┘
+Browser (React)  ◄──WebSocket──►  Axum Server (Rust)
+                                    ├── OT Reconciler (conflict resolution)
+                                    ├── CRDT Engine (convergence guarantee)
+                                    ├── Presence (cursors, heartbeat)
+                                    └── Storage (op log, snapshots)
 ```
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Language | Rust (2024 edition) |
-| Async runtime | Tokio |
-| HTTP/WebSocket | Axum |
-| Serialization | FlatBuffers |
-| Storage | SQLite (dev) / Postgres (prod) |
-| WASM | wasm-bindgen + wasm-pack |
-| Frontend | React + TypeScript + Vite |
-| Metrics | OpenTelemetry |
-| CI/CD | GitHub Actions + Docker |
+| Backend | Rust, Tokio, Axum |
+| Frontend | React, TypeScript, Vite |
+| CRDT | Custom RGA (Replicated Growable Array) |
+| Protocol | WebSocket + JSON (FlatBuffers planned) |
+| Storage | In-memory (SQLite/Postgres planned) |
+| Auth | JWT with HMAC-SHA256 |
+| WASM | wasm-bindgen (ghost state for optimistic updates) |
+| Deployment | Docker, GitHub Actions CI/CD |
 
 ## Crates
 
-| Crate | Purpose |
-|-------|---------|
-| `helios-crdt` | RGA sequence CRDT, LWW Map, Op log |
-| `helios-ot-reconciler` | Transform function, conflict resolution |
-| `helios-network` | WebSocket server, delta sync, presence |
-| `helios-sync` | Protocol types, sync state |
-| `helios-presence` | Heartbeat, selection, viewport tracking |
-| `helios-storage` | Op log, snapshots, tail replay |
-| `helios-auth` | JWT, role-based access control |
-| `helios-telemetry` | Latency, convergence metrics |
-| `helios-wasm-runtime` | Ghost state, optimistic updates |
-| `helios-bench` | Criterion benchmarks |
-| `helios-server` | Binary + integration tests |
-
-## Quick Start
-
-### Prerequisites
-
-- Rust 1.78+
-- Node.js 22+
-- Docker (optional)
-
-### Run locally
-
-```bash
-# Start the server
-cargo run --bin helios-server
-
-# In another terminal, start the frontend
-cd frontend && npm install && npm run dev
-```
-
-Open `http://localhost:5173` — login, type, open another tab to see real-time sync.
-
-### Run with Docker
-
-```bash
-docker compose up --build
-```
-
-Open `http://localhost:3000`.
+| Crate | What it does |
+|-------|-------------|
+| `helios-crdt` | Core CRDT — RGA sequence, LWW Map, Op log |
+| `helios-ot-reconciler` | Resolves conflicts between concurrent ops |
+| `helios-network` | WebSocket server, broadcasts, presence |
+| `helios-sync` | Protocol message types |
+| `helios-presence` | Cursor tracking, heartbeat cleanup |
+| `helios-storage` | Op log persistence, snapshots |
+| `helios-auth` | JWT tokens, role-based access |
+| `helios-telemetry` | Latency and convergence metrics |
+| `helios-wasm-runtime` | Ghost state for browser-side CRDT |
+| `helios-bench` | Performance benchmarks |
 
 ## Development
 
-### Run all tests
-
 ```bash
+# Run all tests (66 tests)
 cargo test --workspace
-```
 
-### Run integration tests
-
-```bash
-# Start server first
-cargo run --bin helios-server &
-
-# Run integration tests
+# Run integration tests (starts server, connects 2 WebSocket clients)
 cargo test -p helios-server --test integration
-```
 
-### Run benchmarks
-
-```bash
+# Run benchmarks
 cargo bench --package helios-bench
-```
 
-### Lint and format
-
-```bash
+# Lint and format
 cargo clippy --workspace -- -D warnings
 cargo fmt --all
+
+# Type-check frontend
+cd frontend && npx tsc --noEmit
 ```
 
 ## Project Structure
@@ -127,61 +121,29 @@ helios/
 ├── bench/                   # Benchmarks
 ├── server/                  # Server binary + integration tests
 ├── frontend/                # React frontend
+│   ├── src/lib/ws.ts        # WebSocket client
+│   ├── src/hooks/useHelios.ts
+│   ├── src/components/      # Login, Editor
+│   └── src/App.tsx
 ├── proto/                   # FlatBuffers schemas
 ├── Dockerfile               # Multi-stage build
-├── docker-compose.yml       # Local deployment
+├── docker-compose.yml
 └── .github/workflows/       # CI/CD
 ```
 
 ## How It Works
 
-### CRDT (Conflict-free Replicated Data Type)
+**CRDT**: Each character gets a unique ID `(peer_id, clock)`. Operations carry IDs, not positions. Two clients inserting at the same position → deterministic order by peer ID.
 
-Each character gets a unique ID `(peer_id, clock)`. Operations carry IDs, not positions. When two clients insert at the same position, ordering is deterministic by peer ID.
+**OT Reconciler**: Server receives ops, checks constraints, emits corrections if needed.
 
-### OT Reconciler
+**Ghost State**: User types → op applied locally instantly (optimistic) → server may send correction → browser animates the diff.
 
-Before broadcasting, the server checks semantic constraints:
-- Table cell: last writer wins
-- Tree node: one parent only
-- Character ordering: deterministic by peer ID
-
-### Ghost State (WASM)
-
-```
-User types → op generated → CRDT applied locally (optimistic)
-Op sent to server → server may emit correction
-If correction → diff optimistic vs reconciled → animate morph
-If no correction → confirm optimistic state
-```
-
-### Delta Sync
-
-- Every op has a sequence number on the server
-- Clients track `last_seen_seq`
-- On reconnect: client sends `{since: last_seen_seq}` and gets only missed ops
-
-## API
-
-### WebSocket Messages
-
-**Client → Server:**
-```json
-{"Join": {"document_id": "default"}}
-{"Op": {"op": {"Insert": {"id": {"peer": "...", "clock": 1}, "after": null, "content": "H"}}}}
-{"Presence": {"cursor": {"peer": "...", "clock": 1}}}
-```
-
-**Server → Client:**
-```json
-{"Sync": {"response": {"ops": [], "current_seq": 42}}}
-{"Op": {"op": {...}, "seq": 42}}
-{"Presence": [{"name": "Alice", "color": "#ff0000", "op_id": {...}}]}
-```
+**Delta Sync**: Every op has a sequence number. On reconnect, client sends `{since: last_seen_seq}` and gets only missed ops.
 
 ## Tests
 
-60+ tests covering:
+66 tests passing:
 - CRDT convergence (fuzz-tested with 100 random orderings)
 - OT transform for all conflict scenarios
 - WebSocket integration (2-client sync, broadcast, delta sync, presence)
