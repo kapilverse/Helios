@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
     let state = Arc::new(AppState::new(pool, initial_doc));
 
     // Try to find static files directory
-    let static_dir = ["static", "frontend/dist"]
+    let static_dir = ["frontend/dist", "static"]
         .iter()
         .map(PathBuf::from)
         .find(|p| p.exists());
