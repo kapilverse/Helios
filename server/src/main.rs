@@ -1,6 +1,6 @@
 use helios_crdt::{Document, Op};
 use helios_network::{app, AppState};
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{postgres::PgPoolOptions, Row};
 use std::{path::PathBuf, sync::Arc};
 
 #[tokio::main]
@@ -18,12 +18,13 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Connected to Neon Postgres and applied migrations");
 
     let mut initial_doc = Document::new();
-    let records = sqlx::query!("SELECT op_data FROM operations ORDER BY seq ASC")
+    let records = sqlx::query("SELECT op_data FROM operations ORDER BY seq ASC")
         .fetch_all(&pool)
         .await?;
 
     for record in records {
-        if let Ok(op) = serde_json::from_value::<Op>(record.op_data) {
+        let op_data: serde_json::Value = record.get("op_data");
+        if let Ok(op) = serde_json::from_value::<Op>(op_data) {
             initial_doc.apply(op);
         }
     }
