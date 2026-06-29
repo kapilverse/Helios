@@ -18,6 +18,8 @@ pub struct SyncResponse {
 pub enum ClientMessage {
     Join {
         document_id: String,
+        name: String,
+        color: String,
     },
     Op {
         op: Op,
