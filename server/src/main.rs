@@ -11,7 +11,10 @@ async fn main() -> anyhow::Result<()> {
     let mut initial_doc = Document::new();
     let db = match std::env::var("DATABASE_URL") {
         Ok(db_url) => {
-            let pool = PgPoolOptions::new().max_connections(5).connect(&db_url).await?;
+            let pool = PgPoolOptions::new()
+                .max_connections(5)
+                .connect(&db_url)
+                .await?;
             sqlx::migrate!("./migrations").run(&pool).await?;
             tracing::info!("Connected to Neon Postgres and applied migrations");
 
@@ -25,7 +28,10 @@ async fn main() -> anyhow::Result<()> {
                     initial_doc.apply(op);
                 }
             }
-            tracing::info!("Reconstructed document with {} ops", initial_doc.op_log.len());
+            tracing::info!(
+                "Reconstructed document with {} ops",
+                initial_doc.op_log.len()
+            );
             Some(pool)
         }
         Err(_) => {
