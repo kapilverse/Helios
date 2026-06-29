@@ -136,10 +136,11 @@ impl SequenceCrdt {
         self.len() == 0
     }
 
-    /// Find insert position: among siblings with same `after`,
-    /// insert in (peer_id, clock) sorted order for determinism.
+    /// Find the correct insert position for a new element.
+    /// Strategy: insert right after the parent element, then shift past any
+    /// siblings that should come before the new element (lower peer/clock).
     fn find_insert_position(&self, after: Option<OpId>, new_id: OpId) -> usize {
-        // Find all elements with the same 'after' value (siblings)
+        // Find all elements with the same 'after' (siblings)
         let siblings: Vec<(usize, &Element)> = self
             .elements
             .iter()
@@ -150,23 +151,23 @@ impl SequenceCrdt {
         if siblings.is_empty() {
             match after {
                 None => 0,
-                Some(after_id) => {
-                    if let Some(&parent_idx) = self.id_index.get(&after_id) {
-                        parent_idx + 1
+                Some(parent_id) => {
+                    if let Some(&parent_pos) = self.id_index.get(&parent_id) {
+                        parent_pos + 1
                     } else {
                         self.elements.len()
                     }
                 }
             }
         } else {
-            // Find insertion point to maintain sorted order by (peer, clock)
+            // Find the last sibling with a smaller ID, insert after it
+            let mut insert_pos = siblings.first().unwrap().0;
             for &(idx, elem) in &siblings {
-                if new_id < elem.id {
-                    return idx;
+                if elem.id < new_id {
+                    insert_pos = idx + 1;
                 }
             }
-            // New element has largest ID among siblings — insert after last
-            siblings.last().unwrap().0 + 1
+            insert_pos
         }
     }
 
