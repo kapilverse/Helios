@@ -52,10 +52,14 @@ export function useHelios(url: string) {
   }, [url]);
 
   const insertChar = useCallback((after: { peer: string; clock: number } | null, ch: string) => {
+    // Apply locally immediately (optimistic update)
+    setContent((prev) => prev + ch);
+    // Send to server
     clientRef.current?.insertChar(after, ch);
   }, []);
 
   const deleteChar = useCallback((target: { peer: string; clock: number }) => {
+    setContent((prev) => prev.slice(0, -1));
     clientRef.current?.deleteChar(target);
   }, []);
 
