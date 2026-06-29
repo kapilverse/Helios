@@ -178,7 +178,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                         seq: current_seq,
                     })
                     .unwrap();
-                    state.broadcast(Some(peer_id), &server_msg).await;
+                    state.broadcast(None, &server_msg).await;
                 }
             }
 
