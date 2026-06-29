@@ -36,21 +36,11 @@ async fn main() -> anyhow::Result<()> {
 
     let state = Arc::new(AppState::new(db, initial_doc));
 
-    // Try to find static files directory
-    let static_dir = ["frontend/dist", "static"]
-        .iter()
-        .map(PathBuf::from)
-        .find(|p| p.exists());
+    let port = std::env::var("HELIOS_PORT").unwrap_or_else(|_| "5174".to_string());
+    let bind_addr = format!("0.0.0.0:{port}");
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
+    tracing::info!("Helios backend listening on http://{}", bind_addr);
 
-    if let Some(ref dir) = static_dir {
-        tracing::info!("Serving static files from: {:?}", dir);
-    } else {
-        tracing::warn!("No static directory found, frontend won't be served");
-    }
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
-    tracing::info!("Helios server listening on http://0.0.0.0:3000");
-
-    axum::serve(listener, app(state, static_dir)).await?;
+    axum::serve(listener, app(state, None::<PathBuf>)).await?;
     Ok(())
 }
