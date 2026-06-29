@@ -50,41 +50,10 @@ export default function App() {
           }}>
             HELIOS
           </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 10px',
-              borderRadius: 20,
-              background: connected ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-              border: `1px solid ${connected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
-            }}
-          >
-            <div style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: connected ? '#10b981' : '#ef4444',
-              boxShadow: connected ? '0 0 8px #10b981' : '0 0 8px #ef4444',
-            }} className="pulse-dot" />
-            <span style={{ fontSize: 12, fontWeight: 500, color: connected ? '#34d399' : '#f87171' }}>
-              {connected ? 'Live' : 'Connecting'}
-            </span>
-          </div>
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(15, 23, 42, 0.5)', padding: '6px 14px', borderRadius: 20, border: '1px solid var(--border-glass)' }}>
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: '#8b5cf6',
-              boxShadow: '0 0 10px #8b5cf6'
-            }}
-          />
-          <span style={{ fontSize: 13, fontWeight: 500, color: '#e2e8f0' }}>{userName}</span>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: userColor }}>{userName}</span>
         </div>
       </div>
 
