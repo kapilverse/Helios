@@ -4,7 +4,7 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 async fn connect_ws() -> WebSocketStream<MaybeTlsStream<TcpStream>> {
-    let (ws, _) = connect_async("ws://127.0.0.1:3000/ws")
+    let (ws, _) = connect_async("ws://127.0.0.1:5174/ws")
         .await
         .expect("Failed to connect");
     ws
