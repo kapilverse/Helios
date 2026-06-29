@@ -7,8 +7,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/ws': {
-        target: 'ws://localhost:3000',
+        target: 'ws://127.0.0.1:5174',
         ws: true,
+      },
+      '/healthz': {
+        target: 'http://127.0.0.1:5174',
       },
     },
   },
