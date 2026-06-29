@@ -18,6 +18,7 @@ COPY storage/ storage/
 COPY auth/ auth/
 COPY telemetry/ telemetry/
 COPY bench/ bench/
+COPY wasm-runtime/ wasm-runtime/
 COPY server/ server/
 COPY proto/ proto/
 RUN cargo build --release --bin helios-server
