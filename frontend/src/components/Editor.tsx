@@ -30,46 +30,55 @@ export function Editor({ content, cursors, onTextChange }: EditorProps) {
   }, [onTextChange]);
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-glass)', display: 'flex', gap: 12, alignItems: 'center', background: 'rgba(15, 23, 42, 0.4)' }}>
-        <span style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{
+        padding: '10px 14px',
+        borderBottom: '1px solid var(--border-glass)',
+        display: 'flex',
+        gap: 8,
+        alignItems: 'center',
+        background: 'rgba(15, 23, 42, 0.4)',
+        flexShrink: 0,
+        flexWrap: 'wrap',
+      }}>
+        <span style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
             <circle cx="9" cy="7" r="4"></circle>
             <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
             <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
           </svg>
-          Collaborators:
+          <span style={{ display: 'none' }} className="desktop-only">Collaborators:</span>
         </span>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {cursors.length === 0 && <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Only you</span>}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {cursors.length === 0 && <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Only you</span>}
           {cursors.map((c, i) => (
-            <span key={i} className="cursor-tag" style={{ display: 'inline-flex', alignItems: 'center', fontSize: 13, fontWeight: 500, color: c.color }}>
+            <span key={i} className="cursor-tag" style={{ display: 'inline-flex', alignItems: 'center', fontSize: 12, fontWeight: 500, color: c.color }}>
               {c.name}
-              {(c.selectionStart != null && c.selectionEnd != null) ? (
-                <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
-                  {'cursor'}
-                </span>
-              ) : null}
             </span>
           ))}
         </div>
       </div>
-      <div style={{ flex: 1, position: 'relative' }}>
+      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
         <textarea
           ref={textRef}
           value={content}
           onChange={handleChange}
           placeholder="Start typing your document..."
+          spellCheck={false}
+          autoCapitalize="sentences"
+          autoComplete="off"
+          autoCorrect="off"
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            padding: '24px 32px',
+            padding: '16px 14px',
+            paddingBottom: 'calc(16px + var(--safe-bottom))',
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            fontSize: 15,
+            fontSize: 14,
             lineHeight: 1.7,
             outline: 'none',
             background: 'transparent',
@@ -79,6 +88,8 @@ export function Editor({ content, cursors, onTextChange }: EditorProps) {
             width: '100%',
             height: '100%',
             boxSizing: 'border-box',
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
           }}
         />
       </div>
