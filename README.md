@@ -1,6 +1,6 @@
 # HELIOS
 
-A real-time collaborative document editor — like Google Docs, but open-source and built from scratch with Rust CRDTs.
+A real-time collaborative document editor - like Google Docs, but open-source and built from scratch with Rust CRDTs.
 
 Multiple users can open the same document in their browsers, type simultaneously, and see each other's edits appear in real time with live cursors. No operational transforms, no fighting over positions — every character gets a unique ID, so concurrent edits always converge.
 
