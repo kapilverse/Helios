@@ -1,21 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#38bdf8" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="description" content="Real-time collaborative document editing with CRDT convergence" />
-  <link rel="manifest" href="/manifest.json" />
-  <link rel="apple-touch-icon" href="/icon-192.png" />
-  <title>HELIOS</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HELIOS Editor</title>
+    <style>
+        * {margin:0;padding:0;box-sizing:border-box;}
+        body {font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;background:#1e1e1e;color:#d4d4d4;height:100vh;display:flex;flex-direction:column;}
+        .header{background:#252526;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #3c3c3c;box-shadow:0 2px 5px rgba(0,0,0,.5);z-index:10;}
+        .logo{font-size:1.5rem;font-weight:800;color:#fff;letter-spacing:1px;display:flex;align-items:center;gap:8px;}
+        .logo::before{content:"☁";color:#007acc;}
+        .controls{display:flex;align-items:center;gap:15px;}
+        .btn{padding:8px 16px;border:none;border-radius:4px;font-size:.9rem;font-weight:500;cursor:pointer;transition:.2s;display:flex;align-items:center;gap:6px;}
+        .btn-download{background:transparent;color:#ccc;border:1px solid #555;}
+        .btn-download:hover{background:#3c3c3c;color:#fff;}
+        .btn-create{background:#007acc;color:#fff;}
+        .btn-create:hover{background:#1a8ad4;}
+        .user-info{color:#aaa;font-size:.9rem;display:flex;align-items:center;gap:8px;margin-left:10px;padding-left:15px;border-left:1px solid #3c3c3c;}
+        .user-avatar{width:28px;height:28px;border-radius:50%;background:#444;display:flex;justify-content:center;align-items:center;font-size:.8rem;font-weight:bold;color:#ccc;}
+        .editor-container{flex-grow:1;display:flex;background:#1e1e1e;}
+        .line-numbers{padding:20px 12px 20px 20px;text-align:right;color:#858585;font-family:'Consolas','Courier New',monospace;font-size:16px;line-height:1.6;user-select:none;background:#1e1e1e;border-right:1px solid #333;}
+        .code-area{flex-grow:1;padding:20px;font-family:'Consolas','Courier New',monospace;font-size:16px;line-height:1.6;color:#d4d4d4;outline:none;overflow-y:auto;}
+        .text-default{color:#d4d4d4;}
+        ::-webkit-scrollbar{width:8px;height:8px;}
+        ::-webkit-scrollbar-track{background:#1e1e1e;}
+        ::-webkit-scrollbar-thumb{background:#424242;border-radius:4px;}
+        ::-webkit-scrollbar-thumb:hover{background:#4f4f4f;}
+    </style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
+    <header class="header">
+        <div class="logo">HELIOS</div>
+        <div class="controls">
+            <button class="btn btn-download">⬇ Download</button>
+            <button class="btn btn-create">+ Create New Document</button>
+            <div class="user-info">
+                <div class="user-avatar">A</div>
+                Anonymous
+            </div>
+        </div>
+    </header>
+    <main class="editor-container">
+        <div class="line-numbers">1</div>
+        <div class="code-area" contenteditable="true"><span class="text-default">hello !!!</span></div>
+    </main>
 </body>
 </html>
