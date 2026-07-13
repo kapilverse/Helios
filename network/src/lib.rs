@@ -1,4 +1,5 @@
 use axum::{
+    routing::{get, post},
     extract::{
         ws::{Message, WebSocket},
         State, WebSocketUpgrade,
@@ -12,17 +13,22 @@ use helios_crdt::Document;
 use helios_ot_reconciler::OtReconciler;
 use helios_presence::PresenceMap;
 use helios_sync::{ClientMessage, ServerMessage, SyncState};
+mod version_history;
+mod plugin_manager;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::services::ServeDir;
 use uuid::Uuid;
 
 pub struct AppState {
+    // existing fields
     pub db: Option<sqlx::PgPool>,
     pub rooms: RwLock<HashMap<String, DocumentRoom>>,
     pub peer_docs: RwLock<HashMap<Uuid, String>>,
     pub peers: RwLock<HashMap<Uuid, tokio::sync::mpsc::Sender<String>>>,
     pub reconciler: OtReconciler,
+    // Plugin registry (in‑memory)
+    pub plugins: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, plugin_manager::PluginInfo>>>,
 }
 
 pub struct DocumentRoom {
@@ -51,6 +57,7 @@ impl AppState {
             peer_docs: RwLock::new(HashMap::new()),
             peers: RwLock::new(HashMap::new()),
             reconciler: OtReconciler::new(),
+            plugins: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         }
     }
 
@@ -131,6 +138,12 @@ pub fn app(state: Arc<AppState>, static_dir: Option<PathBuf>) -> Router {
     let mut router = Router::new()
         .route("/ws", get(ws_handler))
         .route("/healthz", get(|| async { "ok" }))
+        // Version history endpoints
+        .route("/snapshot", get(crate::version_history::list_snapshots_handler))
+        .route("/snapshot/create", get(crate::version_history::create_snapshot_handler))
+        // Plugin management endpoints (admin only)
+        .route("/plugins", get(crate::plugin_manager::list_plugins_handler))
+        .route("/plugins/add", axum::routing::post(crate::plugin_manager::add_plugin_handler))
         .with_state(state);
 
     if let Some(dir) = static_dir {
